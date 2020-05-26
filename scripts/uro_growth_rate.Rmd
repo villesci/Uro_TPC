@@ -1,0 +1,844 @@
+---
+title: "Urosalpinx growth rate (length)"
+author: "Andrew Villeneuve"
+date: "5/26/2020"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE,echo=F}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(rmarkdown)
+library(dplyr)
+library(ggplot2)
+library(forcats)
+library(PerformanceAnalytics)
+library(sjPlot)
+library(lubridate)
+library(HH)
+library(AICcmodavg)
+library(MuMIn)
+library(segmented)
+library(ggiraphExtra)
+library(extrafont)
+library(here)
+library(lubridate)
+loadfonts(device = "win")
+
+
+growth<-read.csv(here::here("data/growth.csv"))
+summary(growth)
+
+
+which(growth$wt>0.09)
+growth[92,12]=0.0109
+growth[193,12]=.0151
+growth[232,12]=.023
+growth[268,12]=.0261
+
+##this below not only eliminates snails who ran out of food
+###eliminate snails that ever ran out of food
+growth.alive<-subset(growth,code!=(6833)&code!=(6831)&code!=(6711)&code!=(6632)&code!=(6631)&code!=(6611)&code!=(6433)&code!=(6422)&code!=(6412)&code!=(6411)&code!=(6233)&code!=(6212)&code!=(6212)&code!=(6111)&code!=(5831)&code!=(5813)&code!=(5732)&code!=(5731)&code!=(5723)&code!=(5711)&code!=(5622)&code!=(5531)&code!=(5333)&code!=(5313)&code!=(5312)&code!=(5213)&code!=(5121)&code!=(5112)&code!=(4522)&code!=(4521)&code!=(4433)&code!=(4432)&code!=(4231)&code!=(3821)&code!=(3712)&code!=(3433)&code!=(3432)&code!=(3421)&code!=(3413)&code!=(2422)&code!=(2421))
+
+
+
+##eliminate all snails that died/unknown  
+growth.alive<-growth.alive[!(growth.alive$alive=="n"),]
+growth.alive<-growth.alive[!(growth$alive=="m"),]
+growth.alive<-na.omit(growth.alive)
+
+#eliminate snails who ran out of food. To be tested with model selection.
+growth.alive<-growth.alive[!(growth$ran.out=="1"),]
+
+
+##temeperature data
+
+
+gbj<-read.csv(here::here("data/environmental_data/rawAtlantic/atl/gbj.csv"),header=T)
+gbj$rdate<-as.POSIXct(gbj$DateTimeStamp,tz="","%m/%d/%Y%H:%M")
+gbj$oce<-"a"
+wh<-read.csv(here::here("data/environmental_data/rawAtlantic/atl/wh.csv"),header=T)
+wh$rdate<-as.POSIXct(wh$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+wh$oce<-"a"
+oy<-read.csv(here::here("data/environmental_data/rawAtlantic/atl/oy.csv"),header=T)
+oy$rdate<-as.POSIXct(oy$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+oy$oce<-"a"
+bf<-read.csv(here::here("data/environmental_data/rawAtlantic/atl/bf.csv"),header=T)
+bf$rdate<-as.POSIXct(bf$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+bf$oce<-"a"
+fb<-read.csv(here::here("data/environmental_data/rawAtlantic/atl/fb.csv"),header=T)
+fb$rdate<-as.POSIXct(fb$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+fb$oce<-"a"
+gcsk<-read.csv(here::here("data/environmental_data/rawAtlantic/atl/gcsk.csv"),header=T)
+gcsk$rdate<-as.POSIXct(gcsk$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+gcsk$oce<-"a"
+
+nah1516<-read.csv(here::here("data/environmental_data/rawPacific/pac/nahcotta_2015_2016.csv"),header=T)#2015 through August, 2016 data after that
+nah1516$rdate<-as.POSIXct(nah1516$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+nah1516$oce<-"p"
+hmi2<-read.csv(here::here("data/environmental_data/rawPacific/pac/hmi2.csv"),header=T)
+hmi2$rdate<-as.POSIXct(hmi2$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")#Indian island 2015
+hmi2$oce<-"p"
+to3<-read.csv(here::here("data/environmental_data/rawPacific/pac/to3.csv"),header=T)
+to3$rdate<-as.POSIXct(to3$DateTimeStamp,tz="","%m/%d/%Y%H:%M")##stitched 2014 and 2015 (post Nove. 21 data together)
+to3$oce<-"p"
+
+#create objects of tempreatures during summer only 
+s.gbj<-filter(gbj,rdate>"2018-06-01 00:00:00" & rdate< "2018-09-30 00:00:00")
+s.wh<-filter(wh,rdate>"2018-06-01 00:00:00" & rdate< "2018-09-30 00:00:00")
+s.oy<-filter(oy,rdate>"2018-06-01 00:00:00" & rdate< "2018-09-30 00:00:00")
+s.bf<-filter(bf,rdate>"2018-06-01 00:00:00" & rdate< "2018-09-30 00:00:00")
+s.fb<-filter(fb,rdate>"2018-06-01 00:00:00" & rdate< "2018-09-30 00:00:00")
+s.to3<-filter(to3,rdate>"2018-06-01 00:00:00" & rdate< "2018-09-30 00:00:00")
+s.hmi2<-filter(hmi2,rdate>"2018-06-01 00:00:00" & rdate< "2018-09-30 00:00:00")
+s.nah1516<-filter(nah1516,rdate>"2018-06-01 00:00:00" & rdate< "2018-09-30 00:00:00")
+s.gcsk<-filter(gcsk,rdate>"2018-06-01 00:00:00" & rdate< "2018-09-30 00:00:00")
+
+##Quartiles
+q<-data.frame("site" = c("gbj","wh","oy","bf","fb","nah1516","hmi2","to3","gcsk"),"quantile"=NA,"decile"=NA, "max"=NA)
+q[1,2]<-quantile(s.gbj$WTMP,0.75,type=1)
+q[2,2]<-quantile(s.wh$WTMP,0.75,type=1)
+q[3,2]<-quantile(s.oy$WTMP,0.75,type=1)
+q[4,2]<-quantile(s.bf$WTMP,0.75,type=1)
+q[5,2]<-quantile(s.fb$WTMP,0.75,type=1)
+q[6,2]<-quantile(s.nah1516$WTMP,0.75,type=1)
+q[7,2]<-quantile(s.hmi2$WTMP,0.75,type=1)
+q[8,2]<-quantile(s.to3$WTMP,0.75,type=1)
+q[9,2]<-quantile(s.gcsk$WTMP,0.75,type=1)
+
+#upper 90th
+q[1,3]<-quantile(s.gbj$WTMP,0.9,type=1)
+q[2,3]<-quantile(s.wh$WTMP,0.9,type=1)
+q[3,3]<-quantile(s.oy$WTMP,0.9,type=1)
+q[4,3]<-quantile(s.bf$WTMP,0.9,type=1)
+q[5,3]<-quantile(s.fb$WTMP,0.9,type=1)
+q[6,3]<-quantile(s.nah1516$WTMP,0.9,type=1)
+q[7,3]<-quantile(s.hmi2$WTMP,0.9,type=1)
+q[8,3]<-quantile(s.to3$WTMP,0.9,type=1)
+q[9,3]<-quantile(s.gcsk$WTMP,0.9,type=1)
+
+#maximum temperature
+q[1,4]<-s.gbj %>% group_by(WTMP) %>% summarise(Value = max(WTMP))
+q[2,4]<-s.wh %>% group_by(WTMP) %>% summarise(Value = max(WTMP))
+q[3,4]<-s.oy %>% group_by(WTMP) %>% summarise(Value = max(WTMP))
+q[4,4]<-s.bf %>% group_by(WTMP) %>% summarise(Value = max(WTMP))
+q[5,4]<-s.fb %>% group_by(WTMP) %>% summarise(Value = max(WTMP))
+q[6,4]<-s.nah1516 %>% group_by(WTMP) %>% summarise(Value = max(WTMP))
+q[7,4]<-s.hmi2 %>% group_by(WTMP) %>% summarise(Value = max(WTMP))
+q[8,4]<-s.to3 %>% group_by(WTMP) %>% summarise(Value = max(WTMP))
+q[9,4]<-s.gcsk %>% group_by(WTMP) %>% summarise(Value=max(WTMP))
+
+
+
+pac2<-rbind(hmi2,nah1516)
+atll<-rbind(gcsk,fb,bf,oy,wh,gbj)
+
+temp<-rbind(pac2,atll) #temperature data for all
+
+means<-data.frame(with(temp,tapply(WTMP,site,mean)))
+
+#summer means
+
+summer.temp<-filter(temp,rdate>"2018-06-01 00:00:00" & rdate< "2018-09-30 00:00:00")
+s.mean<-data.frame(with(summer.temp,tapply(WTMP,site,mean)))
+
+temp$date<-as.Date(temp$rdate)
+
+temp$site<-factor(temp$site, levels=c("gbj","wh","oy","bf","fb","GCSK","nah15","hmi2"))
+#"Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"
+
+#plot of site temperatures
+ggplot(data=temp,aes(x=date,y=WTMP,color=site))+scale_color_viridis_d(name="Site",labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),option="D")+theme_classic()+geom_vline(xintercept = 152)+geom_vline(xintercept = 273)+ylab("SST (°C)")+xlab("")+scale_fill_discrete(name="Site",labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"))+scale_x_date(date_labels = "%b")+theme(text=element_text(family="sanserif",size=14))+stat_smooth(se=,size=2)+geom_point(alpha=0.0002,color="black",fill="white")+guides(color=guide_legend(override.aes=list(fill=NA)))
+  
+
+
+
+```
+# The Study
+
+For this part of the study, we measured growth rates of juvenile snails. We measured snails within two days of them hatching, and grew them in tea strainers separated by population for 24 days. Nine replicates per population were distributed in six temperatures, with three groups of three subreplicates in each temperature/population treatment. The end length was recorded, and we substracted the starting length from the beginning length to get the growth rate (over 24 days).
+
+## Metadata
+
+## code
+
+Unique code for each indiviudal snail, corresponding to population, temperature treatment
+
+## pop
+
+Source population of each snail
+
+## temp
+
+Common garden temperature the snails were raised in for 24 hrs.
+
+## hatch
+
+hatch date of each snail from it's egg case
+
+## exp.date
+
+Date on which hatchling snails were placed in the common garden experiment. Not more then 2 days from the hatch date.
+
+## grow.date
+
+End date where growth measurements were taken. 24 days after exp.date, therefore no more then 26 days post hatch
+
+## alive
+
+Tracks if snails survived the experient. m marks missing, n marks no, y marks yes
+
+## rem.oysters
+
+Was there a surplus of food at the end of the experiment? n marks no, y marks yes
+
+## cal.length.start
+
+caliper length of hatchlings upon entering the experment. We took photos of snails before entering snails into the experiment, and then used ImageJ to extract snail sizes.
+
+### Metadata
+## cal.length.end
+
+caliper length of hatchling at the end of the experiemnt. We took caliper measurements of the snails, as well as verifying the measurements using a subset of photographs in ImageJ
+
+## wt
+
+End weight of snail. Note that no initial starting weight was recorded. 
+
+## ran.out
+
+Did the snail ever run out of food during the consumption experiment? 1 for yes, 0 for no
+
+## bin
+
+Bin number, controls subreplication
+
+## oce
+
+Ocean 
+
+## Data exploration
+
+```{r,include=T,echo=F,warning=F}
+#are different populations different?
+anovasites<-(aov(cal.length~pop*temp,data=growth.alive))
+growth.alive$pop<-as.factor(growth.alive$pop)
+##growth.alive$temp<-as.factor(growth.alive$temp)
+
+summary(anovasites)
+#post-hoc test
+TukeyHSD(anovasites,"pop")
+
+ggplot(growth.alive,aes(x=temp,y=cal.length,color=pop))+geom_point()+geom_smooth()+facet_wrap(pop~.)
+
+# are start and end caliper lengths correlated across temp? 
+M <- (growth.alive[,9:10])
+chart.Correlation(M,histogram=TRUE)
+
+#which variables should we include in our models?
+
+models<-list(
+  "null" = glm(cal.length~1,growth.alive,family=gaussian),
+  "pop" = glm(cal.length~pop,growth.alive,family=gaussian),
+  "temp" = glm(cal.length~temp,growth.alive,family=gaussian),
+  "oce" = glm(cal.length~temp,growth.alive,family=gaussian),
+  "bin" = glm(cal.length~bin,growth.alive,family=gaussian),
+  "out" = glm(cal.length~ran.out,growth.alive,family=gaussian),
+  
+  "pop.temp" = glm(cal.length~pop+temp,growth.alive,family=gaussian),
+  "pop.oce" = glm(cal.length~pop+oce,growth.alive,family=gaussian),
+  "pop.bin" = glm(cal.length~pop+bin,growth.alive,family=gaussian),
+  "pop.out" = glm(cal.length~pop+ran.out,growth.alive,family=gaussian),
+  "temp.oce" = glm(cal.length~oce+temp,growth.alive,family=gaussian),
+  "temp.bin" = glm(cal.length~bin+temp,growth.alive,family=gaussian),
+  "oce.bin" = glm(cal.length~bin+oce,growth.alive,family=gaussian),
+  "temp.out" = glm(cal.length~temp+ran.out,growth.alive,family=gaussian),
+  "oce.out" = glm(cal.length~oce+ran.out,growth.alive,family=gaussian),
+  "bin.out" = glm(cal.length~bin+ran.out,growth.alive,family=gaussian),
+  
+  "pop.temp.oce" = glm(cal.length~pop+temp+oce,growth.alive,family=gaussian),
+  "pop.temp.bin" = glm(cal.length~pop+temp+bin,growth.alive,family=gaussian),
+  "pop.temp.out" = glm(cal.length~pop+temp+ran.out,growth.alive,family=gaussian),
+  "oce.temp.bin" = glm(cal.length~oce+temp+bin,growth.alive,family=gaussian),
+  "oce.temp.out"= glm(cal.length~oce+temp+ran.out,growth.alive,family=gaussian),
+  "oce.bin.out"=glm(cal.length~oce+bin+ran.out,growth.alive,family=gaussian),
+  "bin.out.temp" = glm(cal.length~bin+ran.out+temp,growth.alive,family=gaussian),
+  
+  "pop.temp.oce.bin"= glm(cal.length~pop+oce+temp+bin,growth.alive,family=gaussian),
+  "pop.temp.oce.out" = glm(cal.length~pop+oce+temp+ran.out,growth.alive,family=gaussian),
+  "temp.oce.bin.out"= glm(cal.length~bin+oce+temp+ran.out,growth.alive,family=gaussian),
+  
+  "fulla" = glm(cal.length~pop+temp+oce+bin+ran.out,growth.alive,family=gaussian),
+  
+  
+  "pop*temp" = glm(cal.length~pop*temp,growth.alive,family=gaussian),
+  "pop*oce" = glm(cal.length~pop*oce,growth.alive,family=gaussian),
+  "pop*bin" = glm(cal.length~pop*bin,growth.alive,family=gaussian),
+  "temp*oce" = glm(cal.length~oce*temp,growth.alive,family=gaussian),
+  "temp*bin" = glm(cal.length~bin*temp,growth.alive,family=gaussian),
+  "oce*bin" = glm(cal.length~bin*oce,growth.alive,family=gaussian),
+  "pop*out" = glm(cal.length~pop*ran.out,growth.alive,family=gaussian),
+  "temp*out" = glm(cal.length~temp*ran.out,growth.alive,family=gaussian),
+  "oce*out" = glm(cal.length~oce*ran.out,growth.alive,family=gaussian),
+  "bin*out" = glm(cal.length~bin*ran.out,growth.alive,family=gaussian),
+  
+  "pop*temp*oce" = glm(cal.length~pop*temp*oce,growth.alive,family=gaussian),
+  "pop*temp*bin" = glm(cal.length~pop*temp*bin,growth.alive,family=gaussian),
+  "pop*temp*out" = glm(cal.length~pop*temp*ran.out,growth.alive,family=gaussian),
+  "oce*temp*bin" = glm(cal.length~oce*temp*bin,growth.alive,family=gaussian),
+  "oce*temp*out"= glm(cal.length~oce*temp*ran.out,growth.alive,family=gaussian),
+  "oce*bin*out"=glm(cal.length~oce*bin*ran.out,growth.alive,family=gaussian),
+  "bin*out*temp" = glm(cal.length~bin*ran.out*temp,growth.alive,family=gaussian),
+  
+  "pop*temp*oce*bin"= glm(cal.length~pop*oce*temp*bin,growth.alive,family=gaussian),
+  "pop*temp*oce*out" = glm(cal.length~pop*oce*temp*ran.out,growth.alive,family=gaussian),
+  "temp*oce*bin*out"= glm(cal.length~bin*oce*temp*ran.out,growth.alive,family=gaussian),
+  
+  "fulli" = glm(cal.length~pop*temp*oce*bin*ran.out,growth.alive,family=gaussian))
+
+aictab(models)
+
+#best models only contain the population and comon garden temperature. This is what we will base our segmented regression off of
+summary(models$"pop.temp")
+
+
+hist(resid(models$"pop*temp"),main="",xlab="residuals")
+#normal 
+
+plot(resid(models$"pop*temp")~growth.alive$temp)
+plot(resid(models$"pop*temp")~growth.alive$pop)
+#plot residuals 
+
+```
+
+So there may be a little off with the data, the reisdials plot seems to indiciate. What to do?
+
+## Broken Stick regression
+
+It's hard to compare TPC against one another. One method we've settled on is the use of broken stick regression to allow us to quantify the shape of the reaction as well as the thermael optima (x) and the maximal trait performance (y)
+
+```{r,include=T,echo=F,warning=F}
+bf<-filter(growth.alive,pop=="Beaufort")
+fb<-filter(growth.alive,pop=="Folly Beach")
+gb<-filter(growth.alive,pop=="Great Bay")
+hm<-filter(growth.alive,pop=="Humboldt")
+oy<-filter(growth.alive,pop=="Oyster")
+sk<-filter(growth.alive,pop=="Skidaway")
+wp<-filter(growth.alive,pop=="Willapa")
+wh<-filter(growth.alive,pop=="Woods Hole")
+
+m.wh<-glm(cal.length~temp,wh,family=gaussian)
+#seg.wh<-segmented(m.wh,seg.Z = ~temp, psi=24)
+
+seg.wh<-segmented(m.wh,seg.Z = ~temp, psi=24,seg.control(maxit.glm=100),fix.npsi=T,n.boot=500)###hat's going on wrong in this line???))
+
+m.gb<-glm(cal.length~temp,gb,family=gaussian)
+seg.gb<-segmented(m.gb,seg.Z = ~temp, psi=24)
+
+m.oy<-glm(cal.length~temp,oy,family=gaussian)
+seg.oy<-segmented(m.oy,seg.Z = ~temp, psi=24)
+
+m.bf<-glm(cal.length~temp,bf,family=gaussian)
+seg.bf<-segmented(m.bf,seg.Z = ~temp, psi=24)
+
+m.fb<-glm(cal.length~temp,fb,family=gaussian)
+seg.fb<-segmented(m.fb,seg.Z = ~temp, psi=24)
+
+m.sk<-glm(cal.length~temp,sk,family=gaussian)
+seg.sk<-segmented(m.sk,seg.Z = ~temp, psi=22)
+
+hm<-na.omit(hm)
+m.hm<-glm(cal.length~temp,hm,family=gaussian)
+seg.hm<-segmented(m.hm,seg.Z = ~temp, psi=24)
+
+m.wp<-glm(cal.length~temp,wp,family=gaussian)
+seg.wp<-segmented(m.wp,seg.Z = ~temp, psi=24)
+
+xmin<-min(growth.alive$temp,na.rm=T)
+xmax<-max(growth.alive$temp,na.rm=T)
+
+all.length.seg<-list(seg.gb,seg.wh,seg.oy,seg.bf,seg.fb,seg.sk,seg.wp,seg.hm)
+
+
+##plotting predicted values
+predicted.gb<-data.frame(temp=seq(xmin,xmax,length.out=100))
+predicted.gb$cal.length<-predict(seg.gb,predicted.gb)
+predicted.gb$pop<-"gb"
+predicted.gb$oce<-"a"
+
+predicted.wh<-data.frame(temp=seq(xmin,xmax,length.out=100))
+predicted.wh$cal.length<-predict(seg.wh,predicted.wh)
+predicted.wh$pop<-"wh"
+predicted.wh$oce<-"a"
+
+predicted.oy<-data.frame(temp=seq(xmin,xmax,length.out=100))
+predicted.oy$cal.length<-predict(seg.oy,predicted.oy)
+predicted.oy$pop<-"oy"
+predicted.oy$oce<-"a"
+
+predicted.bf<-data.frame(temp=seq(xmin,xmax,length.out=100))
+predicted.bf$cal.length<-predict(seg.bf,predicted.bf)
+predicted.bf$pop<-"bf"
+predicted.bf$oce<-"a"
+
+predicted.fb<-data.frame(temp=seq(xmin,xmax,length.out=100))
+predicted.fb$cal.length<-predict(seg.fb,predicted.fb)
+predicted.fb$pop<-"fb"
+predicted.fb$oce<-"a"
+
+predicted.sk<-data.frame(temp=seq(xmin,xmax,length.out=100))
+predicted.sk$cal.length<-predict(seg.sk,predicted.sk)
+predicted.sk$pop<-"sk"
+predicted.sk$oce<-"a"
+
+predicted.wp<-data.frame(temp=seq(xmin,xmax,length.out=100))
+predicted.wp$cal.length<-predict(seg.wp,predicted.wp)
+predicted.wp$pop<-"wp"
+predicted.wp$oce<-"p"
+
+predicted.hm<-data.frame(temp=seq(xmin,xmax,length.out=100))
+predicted.hm$cal.length<-predict(seg.hm,predicted.hm)
+predicted.hm$pop<-"hm"
+predicted.hm$oce<-"p"
+
+all.length.pred<-rbind(predicted.gb,predicted.wh,predicted.oy,predicted.bf,predicted.fb,predicted.sk,predicted.wp,predicted.hm)
+all.length.pred$population<-all.length.pred$pop
+all.length.pred$population<-factor(all.length.pred$population,levels=c("gb","wh","oy","bf","fb","sk","wp","hm"))
+
+all.length.pred$pop<-factor(all.length.pred$pop,levels=c("gb","wh","oy","bf","fb","sk","wp","hm"))
+
+
+all.length.pred$pop<-ifelse(all.length.pred$pop=="gb","Great Bay",ifelse(all.length.pred$pop=="wh","Woods Hole",ifelse(all.length.pred$pop=="oy","Oyster",ifelse(all.length.pred$pop=="bf","Beaufort",ifelse(all.length.pred$pop=="fb","Folly Beach",ifelse(all.length.pred$pop=="sk","Skidaway",ifelse(all.length.pred$pop=="wp","Willapa",ifelse(all.length.pred$pop=="hm","Humboldt",NA))))))))
+
+all.length.pred$pop<-as.factor(all.length.pred$pop)
+all.length.pred$pop<-factor(all.length.pred$pop,levels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"))
+
+#give growth alive same pop codes
+growth.alive$population<-ifelse(growth.alive$pop=="gb","Great Bay",ifelse(growth.alive$pop=="wh","Woods Hole",ifelse(growth.alive$pop=="oy","Oyster",ifelse(growth.alive$pop=="bf","Beaufort",ifelse(growth.alive$pop=="fb","Folly Beach",ifelse(growth.alive$pop=="sk","Skidaway",ifelse(growth.alive$pop=="wp","Willapa",ifelse(growth.alive$pop=="hm","Humboldt",NA))))))))
+
+growth.alive$pop<-as.factor(growth.alive$pop)
+growth.alive$population<-factor(growth.alive$pop,levels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"))
+growth.alive$pop<-factor(growth.alive$pop,levels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"))
+
+
+##unified
+ggplot(all.length.pred,aes(x=temp,y=cal.length))+geom_line(aes(group=population,x=temp,y=cal.length,color=population,linetype=population,size=population))+
+  ylab("Shell Length (mm)")+xlab("Common Garden Temperature (°C)")+theme_classic()+
+  scale_x_continuous(breaks=c(16,20,24,26,28,30))+
+  scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
+  scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
+  scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+theme(text=element_text(family="arial",size=22))
+
+##facetted with points
+ggplot(all.length.pred,aes(x=temp,y=cal.length))+geom_line(aes(group=pop,x=temp,y=cal.length,color=pop,linetype=pop,size=pop))+
+  ylab("Shell Length (mm)")+xlab("Common Garden Temperature (°C)")+theme_classic()+
+  scale_x_continuous(breaks=c(16,20,24,26,28,30))+
+  scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="pop")+
+  scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="pop")+
+  scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="pop")+theme(text=element_text(family="arial",size=22))+geom_point(data=growth.alive,aes(x=temp,y=cal.length,group=pop))+facet_wrap(pop~.)+theme(legend.position = "none") 
+```
+
+So this looks good! Only thing is that sometimes (maybe I can show in person), I will get completly different curve shapes, as if the analysis is bouncing back and forth. This begs the question, is it possible to stop this from happening?
+
+```{r}
+summary(seg.oy)
+intercept(seg.gb)
+
+
+pscore.test(seg.gb,~temp)
+pscore.test(seg.wh,~temp)
+pscore.test(seg.oy,~temp)#0.051
+pscore.test(seg.bf,~temp)
+pscore.test(seg.fb,~temp)
+pscore.test(seg.sk,~temp)
+pscore.test(seg.wp,~temp)
+pscore.test(seg.hm,~temp)
+
+davies.test(seg.gb,~temp)
+davies.test(seg.wh,~temp)#.718
+davies.test(seg.oy,~temp)#1
+davies.test(seg.bf,~temp)#.81
+davies.test(seg.fb,~temp)#.672
+davies.test(seg.sk,~temp)#.163
+davies.test(seg.wp,~temp)#.31
+davies.test(seg.hm,~temp)#.64
+
+```
+
+## Breakpoint analysis
+
+To be able to complete statistical analysis of the differences in TPC curves, I extracted the x and y componenets of each curve to give me the thermal optima and maximal trait performance, respectively.
+
+```{r,include=T,echo=F,warning=F}
+brkpts<-data.frame(matrix(,nrow=8,ncol=17))
+colnames(brkpts)<-c("pop","brkptx","brkpty","lat","mean","s.mean","q.mean","t.mean","oce","brkptx_se","se_lower","se_higher","brkpty_se","max","NA","brkptyq","brkptxq")
+
+brkpts$pop<-list("Willapa","Humboldt","Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway")
+
+brkpts[1,2]<-seg.wp$psi[[2]]
+brkpts[2,2]<-seg.hm$psi[[2]]
+brkpts[3,2]<-seg.gb$psi[[2]]
+brkpts[4,2]<-seg.wh$psi[[2]]
+brkpts[5,2]<-seg.oy$psi[[2]]
+brkpts[6,2]<-seg.bf$psi[[2]]
+brkpts[7,2]<-seg.fb$psi[[2]]
+brkpts[8,2]<-seg.sk$psi[[2]]
+
+brkpts[1,3]<-(seg.wp$psi[[2]]*coef(seg.wp)[[2]])+(coef(seg.wp)[[1]])
+brkpts[2,3]<-(seg.hm$psi[[2]]*coef(seg.hm)[[2]])+(coef(seg.hm)[[1]])
+brkpts[3,3]<-(seg.gb$psi[[2]]*coef(seg.gb)[[2]])+(coef(seg.gb)[[1]])
+brkpts[4,3]<-(seg.wh$psi[[2]]*coef(seg.wh)[[2]])+(coef(seg.wh)[[1]])
+brkpts[5,3]<-(seg.oy$psi[[2]]*coef(seg.oy)[[2]])+(coef(seg.oy)[[1]])
+brkpts[6,3]<-(seg.bf$psi[[2]]*coef(seg.bf)[[2]])+(coef(seg.bf)[[1]])
+brkpts[7,3]<-(seg.fb$psi[[2]]*coef(seg.fb)[[2]])+(coef(seg.fb)[[1]])
+brkpts[8,3]<-(seg.sk$psi[[2]]*coef(seg.sk)[[2]])+(coef(seg.sk)[[1]])
+
+#lat
+brkpts$lat<-ifelse(brkpts$pop=="Beaufort",34.819,ifelse(brkpts$pop=="Folly Beach",32.660525,
+                                                        ifelse(brkpts$pop=="Great Bay",43.089589,ifelse(brkpts$pop=="Humboldt",40.849448,ifelse(brkpts$pop=="Oyster",
+                                                                                                                                                37.288562,ifelse(brkpts$pop=="Tomales",38.12805,ifelse(brkpts$pop=="Woods Hole",41.57687,ifelse(brkpts$pop=="Willapa",46.5007,ifelse(brkpts$pop=="Skidaway",31.970,NA)))))))))
+
+means<-data.frame(with(temp,tapply(WTMP,site,mean)))
+
+#means
+brkpts[1,5]<-means[2,1]
+brkpts[2,5]<-means[1,1]
+brkpts[3,5]<-means[8,1]
+brkpts[4,5]<-means[7,1]
+brkpts[5,5]<-means[6,1]
+brkpts[6,5]<-means[5,1]
+brkpts[7,5]<-means[4,1]
+brkpts[8,5]<-means[3,1]
+
+#s.mean
+brkpts[1,6]<-s.mean[2,1]
+brkpts[2,6]<-s.mean[1,1]
+brkpts[3,6]<-s.mean[8,1]
+brkpts[4,6]<-s.mean[7,1]
+brkpts[5,6]<-s.mean[6,1]
+brkpts[6,6]<-s.mean[5,1]
+brkpts[7,6]<-s.mean[4,1]
+brkpts[8,6]<-s.mean[3,1]
+#q.mean
+brkpts[1,7]<-q[6,2]
+brkpts[2,7]<-q[7,2]
+brkpts[3,7]<-q[1,2]
+brkpts[4,7]<-q[2,2]
+brkpts[5,7]<-q[3,2]
+brkpts[6,7]<-q[4,2]
+brkpts[7,7]<-q[5,2]
+brkpts[8,7]<-q[9,2]
+#t.mean
+brkpts[1,8]<-q[6,3]
+brkpts[2,8]<-q[7,3]
+brkpts[3,8]<-q[1,3]
+brkpts[4,8]<-q[2,3]
+brkpts[5,8]<-q[3,3]
+brkpts[6,8]<-q[4,3]
+brkpts[7,8]<-q[5,3]
+brkpts[8,8]<-q[9,3]
+
+#max
+brkpts[1,14]<-q[6,4]
+brkpts[2,14]<-q[7,4]
+brkpts[3,14]<-q[1,4]
+brkpts[4,14]<-q[2,4]
+brkpts[5,14]<-q[3,4]
+brkpts[6,14]<-q[4,4]
+brkpts[7,14]<-q[5,4]
+brkpts[8,14]<-q[9,4]
+
+
+#brkptx_se
+brkpts[1,10]<-seg.wp$psi[[3]]
+brkpts[2,10]<-seg.hm$psi[[3]]
+brkpts[3,10]<-seg.gb$psi[[3]]
+brkpts[4,10]<-seg.wh$psi[[3]]
+brkpts[5,10]<-seg.oy$psi[[3]]
+brkpts[6,10]<-seg.bf$psi[[3]]
+brkpts[7,10]<-seg.fb$psi[[3]]
+brkpts[8,10]<-seg.sk$psi[[3]]
+
+#lower bounds brkptx_se2
+brkpts[1,11]<-brkpts[1,2]-brkpts[1,10]
+brkpts[2,11]<-brkpts[2,2]-brkpts[2,10]
+brkpts[3,11]<-brkpts[3,2]-brkpts[3,10]
+brkpts[4,11]<-brkpts[4,2]-brkpts[4,10]
+brkpts[5,11]<-brkpts[5,2]-brkpts[5,10]
+brkpts[6,11]<-brkpts[6,2]-brkpts[6,10]
+brkpts[7,11]<-brkpts[7,2]-brkpts[7,10]
+brkpts[8,11]<-brkpts[8,2]-brkpts[8,10]
+
+#upper bounds brkpts_se
+brkpts[1,12]<-brkpts[1,2]+brkpts[1,10]
+brkpts[2,12]<-brkpts[2,2]+brkpts[2,10]
+brkpts[3,12]<-brkpts[3,2]+brkpts[3,10]
+brkpts[4,12]<-brkpts[4,2]+brkpts[4,10]
+brkpts[5,12]<-brkpts[5,2]+brkpts[5,10]
+brkpts[6,12]<-brkpts[6,2]+brkpts[6,10]
+brkpts[7,12]<-brkpts[7,2]+brkpts[7,10]
+brkpts[8,12]<-brkpts[8,2]+brkpts[8,10]
+
+#se for y value calculation
+brkpts[1,13]<-(brkpts[1,12]*coef(seg.wp)[[2]])+(coef(seg.wp)[[1]])
+brkpts[2,13]<-(brkpts[2,12]*coef(seg.hm)[[2]])+(coef(seg.hm)[[1]])
+brkpts[3,13]<-(brkpts[3,12]*coef(seg.gb)[[2]])+(coef(seg.gb)[[1]])
+brkpts[4,13]<-(brkpts[4,12]*coef(seg.wh)[[2]])+(coef(seg.wh)[[1]])
+brkpts[5,13]<-(brkpts[5,12]*coef(seg.oy)[[2]])+(coef(seg.oy)[[1]])
+brkpts[6,13]<-(brkpts[6,12]*coef(seg.bf)[[2]])+(coef(seg.bf)[[1]])
+brkpts[7,13]<-(brkpts[7,12]*coef(seg.fb)[[2]])+(coef(seg.fb)[[1]])
+brkpts[8,13]<-(brkpts[8,12]*coef(seg.sk)[[2]])+(coef(seg.sk)[[1]])
+
+
+
+
+brkpts$oce<-ifelse(brkpts$pop=="Beaufort","a",ifelse(brkpts$pop=="Folly Beach","a",ifelse(brkpts$pop=="Great Bay","a",ifelse(brkpts$pop=="Humboldt","p",ifelse(brkpts$pop=="Oyster","a",ifelse(brkpts$pop=="Tomales","p",ifelse(brkpts$pop=="Woods Hole","a",ifelse(brkpts$pop=="Willapa","p",ifelse(brkpts$pop=="Skidaway","a",NA)))))))))
+
+```
+
+# Breakpoint Y
+
+```{r,include=T,echo=F,warning=F}
+##Maximal trait performance (y)
+mods.brk<-list(
+  "null"=glm(brkpty~1,brkpts,family="gaussian"),
+  "lat"=glm(brkpty~lat+oce,brkpts,family="gaussian"),
+  "mean"=glm(brkpty~mean+oce,brkpts,family="gaussian"),
+  "s.mean"=glm(brkpty~s.mean+oce,brkpts,family="gaussian"),
+  "q.mean"=glm(brkpty~q.mean+oce,brkpts,family="gaussian"),
+  "t.mean"=glm(brkpty~t.mean+oce,brkpts,family="gaussian"),
+  "max"=glm(brkpty~max+oce,brkpts,family="gaussian"),
+  "*lat"=glm(brkpty~lat*oce,brkpts,family="gaussian"),
+  "*mean"=glm(brkpty~mean*oce,brkpts,family="gaussian"),
+  "*s.mean"=glm(brkpty~s.mean*oce,brkpts,family="gaussian"),
+  "*q.mean"=glm(brkpty~q.mean*oce,brkpts,family="gaussian"),
+  "*t.mean"=glm(brkpty~t.mean*oce,brkpts,family="gaussian"),
+  "*max"=glm(brkpty~max*oce,brkpts,family="gaussian")
+  )
+
+aictab(mods.brk)
+```
+
+One issue here (and actually in literally every one of these analyses I do) is that the null model does a better job then any of the other predictors! I've been assuming latitude as the best fit here.
+
+```{r,include=T,warning=F}
+##Maximal trait performance (y)
+
+brkptym<-(glm(brkpty~lat+oce,brkpts,family="gaussian"))
+summary(brkptym) 
+
+
+ggplot(brkpts,aes(x=lat,y=brkpty,color=oce,fill=oce),group=oce)+
+  geom_point(size=3)+theme_classic()+
+  ylab("Maximal Trait Performance (mm)")+
+  xlab("Latitude")+
+  theme(text=element_text(family="arial",size=22))+
+    scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('#F8766D','#00BFC4'))+
+    scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('#F8766D','#00BFC4'))+
+  geom_smooth(method='lm',se=F)
+```
+
+Here, I see that both latitude and ocean significantly describe the trend in maximal trait performance. This means possible countergradient variation!
+
+But what about the thermal optima?
+
+#Breakpoint X
+
+```{r,include=T,echo=F,warning=F}
+
+#sensitivity analysis - exclude woods hole?
+#brkpts<-filter(brkpts,pop!="Woods Hole")
+
+mods.brkx<-list(
+  "null"=glm(brkptx~1,brkpts,family="gaussian"),
+  "lat"=glm(brkptx~lat+oce,brkpts,family="gaussian"),
+  "mean"=glm(brkptx~mean+oce,brkpts,family="gaussian"),
+  "s.mean"=glm(brkptx~s.mean+oce,brkpts,family="gaussian"),
+  "q.mean"=glm(brkptx~q.mean+oce,brkpts,family="gaussian"),
+  "t.mean"=glm(brkptx~t.mean+oce,brkpts,family="gaussian"),
+    "max"=glm(brkptx~max+oce,brkpts,family="gaussian"),
+  "*lat"=glm(brkptx~lat*oce,brkpts,family="gaussian"),
+  "*mean"=glm(brkptx~mean*oce,brkpts,family="gaussian"),
+  "*s.mean"=glm(brkptx~s.mean*oce,brkpts,family="gaussian"),
+  "*q.mean"=glm(brkptx~q.mean*oce,brkpts,family="gaussian"),
+  "*t.mean"=glm(brkptx~t.mean*oce,brkpts,family="gaussian"),
+  "*max"=glm(brkptx~max*oce,brkpts,family="gaussian")
+  )
+
+aictab(mods.brkx)
+
+brkptym<-glm(brkptx~lat+oce,brkpts,family="gaussian")
+summary(brkptym)
+
+#weighted regression?
+ggplot(brkpts,aes(x=lat,y=brkptx,color=oce),group=interaction(oce))+
+  geom_point(size=3)+geom_smooth(aes(group=oce),method="lm",se=F)+theme_classic()+
+  ylab("Thermal Optima")+
+  xlab("latitude")+
+  theme(text=element_text(family="arial",size=22))+
+  scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('#F8766D','#00BFC4'))+
+  scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('#F8766D','#00BFC4'))
+  
+
+```
+So here, because I have the standard error for the x breakpoint available, I tried weighting my analysis using the standard error.Would it make sense to do this, or just have the error bars on the points themselves?
+
+Once again, null model is best! Once again, I go with lat as the best predictor. In this case, however, we see that thermal optima does not trend signficantly upward with latitude. 
+
+## Quadratic
+
+One reason we are checking quadratic is that sometimes the optima isn't the optima!
+
+```{r}
+growth.alive<-na.omit(growth.alive)
+quadm<-(glm(cal.length~poly(growth.alive$temp,2)+pop,growth.alive,family="gaussian"))
+hist(resid(quadm))
+plot(quadm)
+
+growth.alive$quad<-poly(growth.alive$temp,2)
+bf<-filter(growth.alive,pop=="Beaufort")
+fb<-filter(growth.alive,pop=="Folly Beach")
+gb<-filter(growth.alive,pop=="Great Bay")
+hm<-filter(growth.alive,pop=="Humboldt")
+oy<-filter(growth.alive,pop=="Oyster")
+sk<-filter(growth.alive,pop=="Skidaway")
+wp<-filter(growth.alive,pop=="Willapa")
+wh<-filter(growth.alive,pop=="Woods Hole")
+
+growth.alive$temp<-na.omit(growth.alive$temp)
+
+xminq<-min(poly(growth.alive$temp,2),na.rm=T)
+xmaxq<-max(poly(growth.alive$temp,2),na.rm=T)
+
+qmgb<-(lm(cal.length~poly(gb$temp,2,raw=T),gb))
+cfgb<-coef(qmgb)
+brkpts[3,16]<-(-cfgb[2]/(2*(cfgb[3])))
+brkpts[3,17]<-cfgb[1]+cfgb[2]*brkpts[3,16]+cfgb[3]*(brkpts[3,16]^2)
+
+qmwh<-(lm(cal.length~poly(wh$temp,2,raw=T),wh))
+cfwh<-coef(qmwh)
+brkpts[4,16]<-(-cfwh[2]/(2*(cfwh[3])))
+brkpts[4,17]<-cfwh[1]+cfwh[2]*brkpts[4,16]+cfwh[3]*(brkpts[4,16]^2)
+
+qmoy<-(lm(cal.length~poly(oy$temp,2,raw=T),oy))
+cfoy<-coef(qmoy)
+brkpts[5,16]<-(-cfoy[2]/(2*(cfoy[3])))
+brkpts[5,17]<-cfoy[1]+cfoy[2]*brkpts[5,16]+cfoy[3]*(brkpts[5,16]^2)
+
+qmbf<-(lm(cal.length~poly(bf$temp,2,raw=T),bf))
+cfbf<-coef(qmbf)
+brkpts[6,16]<-(-cfbf[2]/(2*(cfbf[3])))
+brkpts[6,17]<-cfbf[1]+cfbf[2]*brkpts[6,16]+cfbf[3]*(brkpts[6,16]^2)
+
+
+qmfb<-(lm(cal.length~poly(fb$temp,2,raw=T),fb))
+cffb<-coef(qmfb)
+brkpts[7,16]<-(-cffb[2]/(2*(cffb[3])))
+brkpts[7,17]<-cffb[1]+cffb[2]*brkpts[7,16]+cffb[3]*(brkpts[7,16]^2)
+
+qmsk<-(lm(cal.length~poly(sk$temp,2,raw=T),sk))
+cfsk<-coef(qmsk)
+brkpts[8,16]<-(-cfsk[2]/(2*(cfsk[3])))
+brkpts[8,17]<-cfsk[1]+cfsk[2]*brkpts[8,16]+cfsk[3]*(brkpts[8,16]^2)
+
+qmwp<-(lm(cal.length~poly(wp$temp,2,raw=T),wp))
+cfwp<-coef(qmwp)
+brkpts[1,16]<-(-cfwp[2]/(2*(cfwp[3])))
+brkpts[1,17]<-cfwp[1]+cfwp[2]*brkpts[1,16]+cfwp[3]*(brkpts[1,16]^2)
+
+qmhm<-(lm(cal.length~poly(hm$temp,2,raw=T),hm))
+cfhm<-coef(qmhm)
+brkpts[2,16]<-(-cfhm[2]/(2*(cfhm[3])))
+brkpts[2,17]<-cfhm[1]+cfhm[2]*brkpts[2,16]+cfhm[3]*(brkpts[2,16]^2)
+
+
+
+
+ggplot(growth.alive,aes(y=cal.length,x=temp,group=pop,linetype=pop))+geom_smooth(method='lm',formula=y~poly(x,2),se=F,aes(color=pop,size=pop))+
+theme_classic()+theme(legend.position = "none")+labs(y="Shell Length (mm)",x="Temperature (°C)")+scale_x_continuous(breaks=c(16,20,24,26,28,30))+
+  scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="population")+
+  scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="population")+
+  scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+facet_wrap(pop~.)+geom_point()
+
+ggplot(growth.alive,aes(y=cal.length,x=temp,group=pop,linetype=pop))+geom_smooth(method='lm',formula=y~poly(x,2),se=F,aes(color=pop,size=pop))+
+theme_classic()+labs(y="Shell Length (mm)",x="Temperature (°C)")+scale_x_continuous(breaks=c(16,20,24,26,28,30))+
+  scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
+  scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
+  scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")
+
+
+
+ggplot(growth.alive,aes(y=cal.length,x=temp))+geom_smooth(method='lm',formula=y~poly(x,3),se=F)+geom_point()+facet_wrap(pop~.)
+```
+
+```{R}
+
+ggplot(predicted.oy,aes(x=temp,y=cal.length))+geom_line(aes(x=temp,y=cal.length))
+
+
+mods.brkyq<-list(
+  "null"=glm(brkptyq~1,brkpts,family="gaussian"),
+  "lat"=glm(brkptyq~lat+oce,brkpts,family="gaussian"),
+  "mean"=glm(brkptyq~mean+oce,brkpts,family="gaussian"),
+  "s.mean"=glm(brkptyq~s.mean+oce,brkpts,family="gaussian"),
+  "q.mean"=glm(brkptyq~q.mean+oce,brkpts,family="gaussian"),
+  "t.mean"=glm(brkptyq~t.mean+oce,brkpts,family="gaussian"),
+  "max"=glm(brkptyq~max+oce,brkpts,family="gaussian"),
+  "*lat"=glm(brkptyq~lat*oce,brkpts,family="gaussian"),
+  "*mean"=glm(brkptyq~mean*oce,brkpts,family="gaussian"),
+  "*s.mean"=glm(brkptyq~s.mean*oce,brkpts,family="gaussian"),
+  "*q.mean"=glm(brkptyq~q.mean*oce,brkpts,family="gaussian"),
+  "*t.mean"=glm(brkptyq~t.mean*oce,brkpts,family="gaussian"),
+  "*max"=glm(brkptyq~max*oce,brkpts,family="gaussian")
+  )
+
+aictab(mods.brkyq)
+
+brkptxmq<-glm(brkpty~lat+oce,brkpts,family="gaussian")
+summary(brkptxmq)
+
+ggplot(brkpts,aes(x=lat,y=brkptyq,color=oce),group=interaction(oce))+
+  geom_point(size=3)+geom_smooth(aes(group=oce),method="lm",se=F)+theme_classic()+
+  ylab("Thermal Optima")+
+  xlab("Latitude (degrees)")+
+  theme(text=element_text(family="arial",size=22))+
+  scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('#F8766D','#00BFC4'))+
+  scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('#F8766D','#00BFC4'))
+
+mods.brkxq<-list(
+  "null"=glm(brkptxq~1,brkpts,family="gaussian"),
+  "lat"=glm(brkptxq~lat+oce,brkpts,family="gaussian"),
+  "mean"=glm(brkptxq~mean+oce,brkpts,family="gaussian"),
+  "s.mean"=glm(brkptxq~s.mean+oce,brkpts,family="gaussian"),
+  "q.mean"=glm(brkptxq~q.mean+oce,brkpts,family="gaussian"),
+  "t.mean"=glm(brkptxq~t.mean+oce,brkpts,family="gaussian"),
+  "*lat"=glm(brkptxq~lat*oce,brkpts,family="gaussian"),
+  "*mean"=glm(brkptxq~mean*oce,brkpts,family="gaussian"),
+  "*s.mean"=glm(brkptxq~s.mean*oce,brkpts,family="gaussian"),
+  "*q.mean"=glm(brkptxq~q.mean*oce,brkpts,family="gaussian"),
+  "*t.mean"=glm(brkptxq~t.mean*oce,brkpts,family="gaussian")
+  )
+
+aictab(mods.brkxq)
+
+brkptxmq<-glm(brkptx~q.mean+oce,brkpts,family="gaussian")
+summary(brkptxmq)
+
+ggplot(brkpts,aes(x=lat,y=brkptxq,color=oce),group=interaction(oce))+
+  geom_point(size=3)+geom_smooth(aes(group=oce),method="lm",se=F)+theme_classic()+
+  ylab("Thermal Optima")+
+  xlab("Latitude (degrees)")+
+  theme(text=element_text(family="arial",size=22))+
+  scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('#F8766D','#00BFC4'))+
+  scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('#F8766D','#00BFC4'))
+```
+```{r}
+
+brkpts$pop<-unlist(brkpts$pop)
+write.csv(brkpts,"C:/Users/drewv/Documents/UMASS/data/growth_cal.csv",row.names=F)
+```
+
+
