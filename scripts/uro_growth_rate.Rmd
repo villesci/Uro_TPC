@@ -178,63 +178,63 @@ For this part of the study, we measured growth rates of juvenile snails. We meas
 
 ## Metadata
 
-## code
+### code
 
 Unique code for each indiviudal snail, corresponding to population, temperature treatment
 
-## pop
+### pop
 
 Source population of each snail
 
-## temp
+### temp
 
 Common garden temperature the snails were raised in for 24 hrs. Degrees C
 
-## hatch
+### hatch
 
 hatch date of each snail from it's egg case
 
-## exp.date
+### exp.date
 
 Date on which hatchling snails were placed in the common garden experiment. Not more then 2 days from the hatch date.
 
-## grow.date
+### grow.date
 
 End date where growth measurements were taken. 24 days after exp.date, therefore no more then 26 days post hatch
 
-## alive
+### alive
 
 Tracks if snails survived the experient. m marks missing, n marks no, y marks yes
 
-## rem.oysters
+### rem.oysters
 
 Was there a surplus of food at the end of the experiment? n marks no, y marks yes
 
-## cal.length.start
+### cal.length.start
 
 caliper length of hatchlings upon entering the experment. We took photos of snails before entering snails into the experiment, and then used ImageJ to extract snail sizes. Size in mm
 
-## cal.length.end
+### cal.length.end
 
 caliper length of hatchling at the end of the experiemnt. We took caliper measurements of the snails, as well as verifying the measurements using a subset of photographs in ImageJ. Size in mm
 
-## wt
+### wt
 
 End weight of snail. Note that no initial starting weight was recorded. Weight in g.
 
-## ran.out
+### ran.out
 
 Did the snail ever run out of food during the consumption experiment? 1 for yes, 0 for no
 
-## bin
+### bin
 
 Bin number, controls subreplication
 
-## oce
+### oce
 
 Ocean 
 
-## Environmental Data
+### Environmental Data
 
 ```{r,include=T,echo=F,warning=F}
 #plot of site temperatures
@@ -791,7 +791,7 @@ ggplot(brkpts,aes(x=lat,y=brkptx,color=oce),group=interaction(oce))+
 ```
 
 
-Once again, null model is best! Once again, I go with lat as the best predictor. In this case, however, we see that thermal optima does not trend signficantly upward with latitude. I can attribute this insignicance mostly to the presence of the Woods Hole population. If we remove this, the trend becomes signficant.
+Once again, null model is best! Once again, I go with lat as the best predictor. In this case, however, we see that thermal optima does not trend signficantly upward with latitude. I can attribute this insignicance mostly to the presence of the Woods Hole population. If we remove this, the trend becomes slightly more signficant.
 
 ```{r,include=T,echo=F,warning=F}
 
@@ -801,6 +801,14 @@ brkpts_wh<-filter(brkpts,pop!="Woods Hole")
 
 brkptym_wh<-lm(brkptx~lat+oce,brkpts_wh)
 summary(brkptym_wh)
+
+ggplot(brkpts_wh,aes(x=lat,y=brkptx,color=oce),group=interaction(oce))+
+  geom_point(size=3)+geom_smooth(aes(group=oce),method="lm",se=F)+theme_classic()+
+  ylab("Thermal Optima")+
+  xlab("latitude")+
+  theme(text=element_text(family="arial",size=22))+
+  scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
+  scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))
 
 ```
 

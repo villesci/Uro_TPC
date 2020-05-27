@@ -271,7 +271,7 @@ mods.brk<-list(
   
 
 aictab(mods.brk)
-summary(glm(brkpty~t.mean+oce,brkpts,family="gaussian"))
+summary(glm(brkpty~lat+oce,brkpts,family="gaussian"))
 ggplot(brkpts,aes(x=lat,y=brkptx,color=lat,shape=oce))+geom_point(aes(size=2))+geom_smooth(method = 'lm')
 
 ##temp of breakpoint x size of breakpoint
@@ -389,7 +389,7 @@ growth.alive$population<-factor(growth.alive$pop,levels=c("Great Bay","Woods Hol
 
 
 ggplot(growth.alive,aes(y=wt,x=temp,group=population,linetype=population))+geom_smooth(method='lm',formula=y~poly(x,2),se=F,aes(color=population,size=population))+geom_point()+facet_wrap(population~.)+
-  theme_classic()+theme(legend.position = "none")+labs(y="Weight (g)",x="Temperature (°C)")+scale_y_continuous(breaks=c(0.005,0.01,0.015,0.02,0.025))+scale_x_continuous(breaks=c(16,20,24,26,28,30))+
+  theme_classic()+theme(legend.position = "none")+labs(y="Weight (g)",x="Temperature (?C)")+scale_y_continuous(breaks=c(0.005,0.01,0.015,0.02,0.025))+scale_x_continuous(breaks=c(16,20,24,26,28,30))+
   scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="population")+
   scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="population")+
   scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")
@@ -399,7 +399,7 @@ ggplot(growth.alive,aes(y=wt,x=temp,group=population,color=population,linetype=p
   scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
   scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
   scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
-  theme_classic()+labs(y="Weight (g)",x="Temperature (°C)")
+  theme_classic()+labs(y="Weight (g)",x="Temperature (?C)")
 
 
 ggplot(oy,aes(y=wt,x=temp))+geom_smooth(method='lm',formula=y~poly(x,2),se=F)+geom_point()
