@@ -31,7 +31,7 @@ loadfonts(device = "win")
 
 growth<-read.csv(here::here("data/growth.csv"))
 summary(growth)
-
+#identify and edit errors that are most certainly due to neglecting a 0 in data entry.
 
 which(growth$wt>0.09)
 growth[92,12]=0.0109
@@ -39,18 +39,18 @@ growth[193,12]=.0151
 growth[232,12]=.023
 growth[268,12]=.0261
 
-##this below not only eliminates snails who ran out of food
+##this below not only eliminates snails who ran out of food, but also
 ###eliminate snails that ever ran out of food
+##step beyod simply removing measurements when snails ran out of food. 
 growth.alive<-subset(growth,code!=(6833)&code!=(6831)&code!=(6711)&code!=(6632)&code!=(6631)&code!=(6611)&code!=(6433)&code!=(6422)&code!=(6412)&code!=(6411)&code!=(6233)&code!=(6212)&code!=(6212)&code!=(6111)&code!=(5831)&code!=(5813)&code!=(5732)&code!=(5731)&code!=(5723)&code!=(5711)&code!=(5622)&code!=(5531)&code!=(5333)&code!=(5313)&code!=(5312)&code!=(5213)&code!=(5121)&code!=(5112)&code!=(4522)&code!=(4521)&code!=(4433)&code!=(4432)&code!=(4231)&code!=(3821)&code!=(3712)&code!=(3433)&code!=(3432)&code!=(3421)&code!=(3413)&code!=(2422)&code!=(2421))
-
 
 
 ##eliminate all snails that died/unknown  
 growth.alive<-growth.alive[!(growth.alive$alive=="n"),]
 growth.alive<-growth.alive[!(growth$alive=="m"),]
-growth.alive<-na.omit(growth.alive)
+growth.alive<-tidyr::drop_na(growth.alive)
 
-#eliminate snails who ran out of food. To be tested with model selection.
+#eliminate snails who ran out of food. 
 growth.alive<-growth.alive[!(growth$ran.out=="1"),]
 
 
@@ -98,7 +98,7 @@ s.nah1516<-filter(nah1516,rdate>"2018-06-01 00:00:00" & rdate< "2018-09-30 00:00
 s.gcsk<-filter(gcsk,rdate>"2018-06-01 00:00:00" & rdate< "2018-09-30 00:00:00")
 
 ##Quartiles
-q<-data.frame("site" = c("gbj","wh","oy","bf","fb","nah1516","hmi2","to3","gcsk"),"quantile"=NA,"decile"=NA, "max"=NA)
+q<-data.frame("site" = c("gbj","wh","oy","bf","fb","nah1516","hmi2","to3","gcsk"),"quantile"=NA,"decile"=NA, "max"=NA, "mean"=NA,"summer mean"=NA)
 q[1,2]<-quantile(s.gbj$WTMP,0.75,type=1)
 q[2,2]<-quantile(s.wh$WTMP,0.75,type=1)
 q[3,2]<-quantile(s.oy$WTMP,0.75,type=1)
@@ -121,17 +121,38 @@ q[8,3]<-quantile(s.to3$WTMP,0.9,type=1)
 q[9,3]<-quantile(s.gcsk$WTMP,0.9,type=1)
 
 #maximum temperature
-q[1,4]<-s.gbj %>% group_by(WTMP) %>% summarise(Value = max(WTMP))
-q[2,4]<-s.wh %>% group_by(WTMP) %>% summarise(Value = max(WTMP))
-q[3,4]<-s.oy %>% group_by(WTMP) %>% summarise(Value = max(WTMP))
-q[4,4]<-s.bf %>% group_by(WTMP) %>% summarise(Value = max(WTMP))
-q[5,4]<-s.fb %>% group_by(WTMP) %>% summarise(Value = max(WTMP))
-q[6,4]<-s.nah1516 %>% group_by(WTMP) %>% summarise(Value = max(WTMP))
-q[7,4]<-s.hmi2 %>% group_by(WTMP) %>% summarise(Value = max(WTMP))
-q[8,4]<-s.to3 %>% group_by(WTMP) %>% summarise(Value = max(WTMP))
-q[9,4]<-s.gcsk %>% group_by(WTMP) %>% summarise(Value=max(WTMP))
+q[1,4]<-s.gbj %>%  summarise(Value = max(WTMP))
+q[2,4]<-s.wh  %>% summarise(Value = max(WTMP))
+q[3,4]<-s.oy  %>% summarise(Value = max(WTMP))
+q[4,4]<-s.bf  %>% summarise(Value = max(WTMP))
+q[5,4]<-s.fb  %>% summarise(Value = max(WTMP))
+q[6,4]<-s.nah1516 %>% summarise(Value = max(WTMP))
+q[7,4]<-s.hmi2  %>% summarise(Value = max(WTMP))
+q[8,4]<-s.to3  %>% summarise(Value = max(WTMP))
+q[9,4]<-s.gcsk  %>% summarise(Value=max(WTMP))
 
+#means
+q[1,5]<-mean(gbj$WTMP)
+q[2,5]<-mean(wh$WTMP)
+q[3,5]<-mean(oy$WTMP)
+q[4,5]<-mean(bf$WTMP)
+q[5,5]<-mean(fb$WTMP)
+q[6,5]<-mean(nah1516$WTMP)
+q[7,5]<-mean(hmi2$WTMP)
+q[8,5]<-mean(to3$WTMP)
+q[9,5]<-mean(gcsk$WTMP)
 
+#summer means
+#means
+q[1,6]<-mean(s.gbj$WTMP)
+q[2,6]<-mean(s.wh$WTMP)
+q[3,6]<-mean(s.oy$WTMP)
+q[4,6]<-mean(s.bf$WTMP)
+q[5,6]<-mean(s.fb$WTMP)
+q[6,6]<-mean(s.nah1516$WTMP)
+q[7,6]<-mean(s.hmi2$WTMP)
+q[8,6]<-mean(s.to3$WTMP)
+q[9,6]<-mean(s.gcsk$WTMP)
 
 pac2<-rbind(hmi2,nah1516)
 atll<-rbind(gcsk,fb,bf,oy,wh,gbj)
@@ -149,14 +170,8 @@ temp$date<-as.Date(temp$rdate)
 
 temp$site<-factor(temp$site, levels=c("gbj","wh","oy","bf","fb","GCSK","nah15","hmi2"))
 #"Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"
-
-#plot of site temperatures
-ggplot(data=temp,aes(x=date,y=WTMP,color=site))+scale_color_viridis_d(name="Site",labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),option="D")+theme_classic()+geom_vline(xintercept = 152)+geom_vline(xintercept = 273)+ylab("SST (°C)")+xlab("")+scale_fill_discrete(name="Site",labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"))+scale_x_date(date_labels = "%b")+theme(text=element_text(family="sanserif",size=14))+stat_smooth(se=,size=2)+geom_point(alpha=0.0002,color="black",fill="white")+guides(color=guide_legend(override.aes=list(fill=NA)))
-  
-
-
-
 ```
+
 # The Study
 
 For this part of the study, we measured growth rates of juvenile snails. We measured snails within two days of them hatching, and grew them in tea strainers separated by population for 24 days. Nine replicates per population were distributed in six temperatures, with three groups of three subreplicates in each temperature/population treatment. The end length was recorded, and we substracted the starting length from the beginning length to get the growth rate (over 24 days).
@@ -173,7 +188,7 @@ Source population of each snail
 
 ## temp
 
-Common garden temperature the snails were raised in for 24 hrs.
+Common garden temperature the snails were raised in for 24 hrs. Degrees C
 
 ## hatch
 
@@ -197,16 +212,15 @@ Was there a surplus of food at the end of the experiment? n marks no, y marks ye
 
 ## cal.length.start
 
-caliper length of hatchlings upon entering the experment. We took photos of snails before entering snails into the experiment, and then used ImageJ to extract snail sizes.
+caliper length of hatchlings upon entering the experment. We took photos of snails before entering snails into the experiment, and then used ImageJ to extract snail sizes. Size in mm
 
-### Metadata
 ## cal.length.end
 
-caliper length of hatchling at the end of the experiemnt. We took caliper measurements of the snails, as well as verifying the measurements using a subset of photographs in ImageJ
+caliper length of hatchling at the end of the experiemnt. We took caliper measurements of the snails, as well as verifying the measurements using a subset of photographs in ImageJ. Size in mm
 
 ## wt
 
-End weight of snail. Note that no initial starting weight was recorded. 
+End weight of snail. Note that no initial starting weight was recorded. Weight in g.
 
 ## ran.out
 
@@ -220,107 +234,162 @@ Bin number, controls subreplication
 
 Ocean 
 
-## Data exploration
+## Environmental Data
 
 ```{r,include=T,echo=F,warning=F}
-#are different populations different?
+#plot of site temperatures
+ggplot(data=temp,aes(x=date,y=WTMP,color=site))+scale_color_viridis_d(name="Site",labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),option="D")+theme_classic()+geom_vline(xintercept = 152)+geom_vline(xintercept = 273)+ylab("SST (°C)")+xlab("")+scale_fill_discrete(name="Site",labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"))+scale_x_date(date_labels = "%b")+theme(text=element_text(family="sanserif",size=14))+stat_smooth(se=,size=2)+geom_point(alpha=0.0002,color="black",fill="white")+guides(color=guide_legend(override.aes=list(fill=NA)))
+  
+q
+
+
+```
+# Data exploration
+
+Do populations differ in their growth rate? Here, ANOVA tells us that growth betwween sites are signficantly different
+```{r,include=T,echo=F,warning=F}
+
 anovasites<-(aov(cal.length~pop*temp,data=growth.alive))
 growth.alive$pop<-as.factor(growth.alive$pop)
-##growth.alive$temp<-as.factor(growth.alive$temp)
 
+```
+
+Should we use end caliper lengths, or do we need to subtract initial caliper length from end caliper length? In other words, do initial caliper lengths differ, requiring us to standardize our growth rate? Here, we find that populations do differ in initial growth. Thus, we must standardize growth by creating a growth rate of Final size - initial size. 
+```{r,echo=F}
+summary(aov(cal.length.start~pop,data=growth.alive))
+```
+```{r,include=F,echo=F,warning=F}
 summary(anovasites)
 #post-hoc test
 TukeyHSD(anovasites,"pop")
 
 ggplot(growth.alive,aes(x=temp,y=cal.length,color=pop))+geom_point()+geom_smooth()+facet_wrap(pop~.)
+```
 
-# are start and end caliper lengths correlated across temp? 
-M <- (growth.alive[,9:10])
+
+## Correlations
+```{r,include=T,echo=F,warning=F}
+M <- (growth.alive[,9:12])
 chart.Correlation(M,histogram=TRUE)
 
-#which variables should we include in our models?
+```
+Here, we see that cal length and weight are both highly correlated. Thus, we will not include weight in any of our models. 
+
+
+## Residuals of full model
+Here, we investigate the residuals of the full model. 
+
+```{r,echo=F,warning=F}
+growth.alive<-na.omit(growth.alive)
+fulli<-(lm(cal.length~pop*temp*oce*bin,growth.alive))
+
+plot(resid(fulli))
+hist(resid(fulli))
+skewness(growth.alive$cal.length)
+#negative skew
+growth.alive<-tidyr::drop_na(growth.alive)
+growth.alive<-na.omit(growth.alive)
+
+growth.alive$log_growth<-log(max(growth.alive$cal.length+1)-growth.alive$cal.length)
+fulli2<-(lm(log_growth~pop*temp*oce*bin,growth.alive))
+
+plot(fulli2)
+plot(resid(fulli2))
+hist(resid(fulli2))
+
+skewness(growth.alive$log_growth)
+```
+While the log transformation improves the skewness slightly (silenced but in code), we will assume the distribution of residuals are normal and proceed with untransformed growth rate. 
+
+## Coplots
+
+Other than temperature and population, which we control for, do we see different reactions depending on bin? Here, reactions appaer to be the same no matter what bin we used. Note: Margins were too big on this figure to include in the markdown - viewable in R console. 
+```{r,echo=F}
+dev.off()
+coplot(cal.length~temp |pop*bin,data=growth.alive)
+
+```
+# Data Analysis
+## Model predictors
+
+We are going to create TPCs for each population by temperature, using both piecewise (segmented) regression and quadratic regression. What predictors should be used in these models?
+```{r,echo=F, warning=F}
 
 models<-list(
-  "null" = glm(cal.length~1,growth.alive,family=gaussian),
-  "pop" = glm(cal.length~pop,growth.alive,family=gaussian),
-  "temp" = glm(cal.length~temp,growth.alive,family=gaussian),
-  "oce" = glm(cal.length~temp,growth.alive,family=gaussian),
-  "bin" = glm(cal.length~bin,growth.alive,family=gaussian),
-  "out" = glm(cal.length~ran.out,growth.alive,family=gaussian),
+  "null" = lm(cal.length~1,growth.alive),
+  "pop" = lm(cal.length~pop,growth.alive),
+  "temp" = lm(cal.length~temp,growth.alive),
+  "oce" = lm(cal.length~temp,growth.alive),
+  "bin" = lm(cal.length~bin,growth.alive),
+  "out" = lm(cal.length~ran.out,growth.alive),
   
-  "pop.temp" = glm(cal.length~pop+temp,growth.alive,family=gaussian),
-  "pop.oce" = glm(cal.length~pop+oce,growth.alive,family=gaussian),
-  "pop.bin" = glm(cal.length~pop+bin,growth.alive,family=gaussian),
-  "pop.out" = glm(cal.length~pop+ran.out,growth.alive,family=gaussian),
-  "temp.oce" = glm(cal.length~oce+temp,growth.alive,family=gaussian),
-  "temp.bin" = glm(cal.length~bin+temp,growth.alive,family=gaussian),
-  "oce.bin" = glm(cal.length~bin+oce,growth.alive,family=gaussian),
-  "temp.out" = glm(cal.length~temp+ran.out,growth.alive,family=gaussian),
-  "oce.out" = glm(cal.length~oce+ran.out,growth.alive,family=gaussian),
-  "bin.out" = glm(cal.length~bin+ran.out,growth.alive,family=gaussian),
+  "pop.temp" = lm(cal.length~pop+temp,growth.alive),
+  "pop.oce" = lm(cal.length~pop+oce,growth.alive),
+  "pop.bin" = lm(cal.length~pop+bin,growth.alive),
+  "pop.out" = lm(cal.length~pop+ran.out,growth.alive),
+  "temp.oce" = lm(cal.length~oce+temp,growth.alive),
+  "temp.bin" = lm(cal.length~bin+temp,growth.alive),
+  "oce.bin" = lm(cal.length~bin+oce,growth.alive),
+  "temp.out" = lm(cal.length~temp+ran.out,growth.alive),
+  "oce.out" = lm(cal.length~oce+ran.out,growth.alive),
+  "bin.out" = lm(cal.length~bin+ran.out,growth.alive),
   
-  "pop.temp.oce" = glm(cal.length~pop+temp+oce,growth.alive,family=gaussian),
-  "pop.temp.bin" = glm(cal.length~pop+temp+bin,growth.alive,family=gaussian),
-  "pop.temp.out" = glm(cal.length~pop+temp+ran.out,growth.alive,family=gaussian),
-  "oce.temp.bin" = glm(cal.length~oce+temp+bin,growth.alive,family=gaussian),
-  "oce.temp.out"= glm(cal.length~oce+temp+ran.out,growth.alive,family=gaussian),
-  "oce.bin.out"=glm(cal.length~oce+bin+ran.out,growth.alive,family=gaussian),
-  "bin.out.temp" = glm(cal.length~bin+ran.out+temp,growth.alive,family=gaussian),
+  "pop.temp.oce" = lm(cal.length~pop+temp+oce,growth.alive),
+  "pop.temp.bin" = lm(cal.length~pop+temp+bin,growth.alive),
+  "pop.temp.out" = lm(cal.length~pop+temp+ran.out,growth.alive),
+  "oce.temp.bin" = lm(cal.length~oce+temp+bin,growth.alive),
+  "oce.temp.out"= lm(cal.length~oce+temp+ran.out,growth.alive),
+  "oce.bin.out"=lm(cal.length~oce+bin+ran.out,growth.alive),
+  "bin.out.temp" = lm(cal.length~bin+ran.out+temp,growth.alive),
   
-  "pop.temp.oce.bin"= glm(cal.length~pop+oce+temp+bin,growth.alive,family=gaussian),
-  "pop.temp.oce.out" = glm(cal.length~pop+oce+temp+ran.out,growth.alive,family=gaussian),
-  "temp.oce.bin.out"= glm(cal.length~bin+oce+temp+ran.out,growth.alive,family=gaussian),
+  "pop.temp.oce.bin"= lm(cal.length~pop+oce+temp+bin,growth.alive),
+  "pop.temp.oce.out" = lm(cal.length~pop+oce+temp+ran.out,growth.alive),
+  "temp.oce.bin.out"= lm(cal.length~bin+oce+temp+ran.out,growth.alive),
   
-  "fulla" = glm(cal.length~pop+temp+oce+bin+ran.out,growth.alive,family=gaussian),
+  "fulla" = lm(cal.length~pop+temp+oce+bin+ran.out,growth.alive),
   
   
-  "pop*temp" = glm(cal.length~pop*temp,growth.alive,family=gaussian),
-  "pop*oce" = glm(cal.length~pop*oce,growth.alive,family=gaussian),
-  "pop*bin" = glm(cal.length~pop*bin,growth.alive,family=gaussian),
-  "temp*oce" = glm(cal.length~oce*temp,growth.alive,family=gaussian),
-  "temp*bin" = glm(cal.length~bin*temp,growth.alive,family=gaussian),
-  "oce*bin" = glm(cal.length~bin*oce,growth.alive,family=gaussian),
-  "pop*out" = glm(cal.length~pop*ran.out,growth.alive,family=gaussian),
-  "temp*out" = glm(cal.length~temp*ran.out,growth.alive,family=gaussian),
-  "oce*out" = glm(cal.length~oce*ran.out,growth.alive,family=gaussian),
-  "bin*out" = glm(cal.length~bin*ran.out,growth.alive,family=gaussian),
+  "pop*temp" = lm(cal.length~pop*temp,growth.alive),
+  "pop*oce" = lm(cal.length~pop*oce,growth.alive),
+  "pop*bin" = lm(cal.length~pop*bin,growth.alive),
+  "temp*oce" = lm(cal.length~oce*temp,growth.alive),
+  "temp*bin" = lm(cal.length~bin*temp,growth.alive),
+  "oce*bin" = lm(cal.length~bin*oce,growth.alive),
+  "pop*out" = lm(cal.length~pop*ran.out,growth.alive),
+  "temp*out" = lm(cal.length~temp*ran.out,growth.alive),
+  "oce*out" = lm(cal.length~oce*ran.out,growth.alive),
+  "bin*out" = lm(cal.length~bin*ran.out,growth.alive),
   
-  "pop*temp*oce" = glm(cal.length~pop*temp*oce,growth.alive,family=gaussian),
-  "pop*temp*bin" = glm(cal.length~pop*temp*bin,growth.alive,family=gaussian),
-  "pop*temp*out" = glm(cal.length~pop*temp*ran.out,growth.alive,family=gaussian),
-  "oce*temp*bin" = glm(cal.length~oce*temp*bin,growth.alive,family=gaussian),
-  "oce*temp*out"= glm(cal.length~oce*temp*ran.out,growth.alive,family=gaussian),
-  "oce*bin*out"=glm(cal.length~oce*bin*ran.out,growth.alive,family=gaussian),
-  "bin*out*temp" = glm(cal.length~bin*ran.out*temp,growth.alive,family=gaussian),
+  "pop*temp*oce" = lm(cal.length~pop*temp*oce,growth.alive),
+  "pop*temp*bin" = lm(cal.length~pop*temp*bin,growth.alive),
+  "pop*temp*out" = lm(cal.length~pop*temp*ran.out,growth.alive),
+  "oce*temp*bin" = lm(cal.length~oce*temp*bin,growth.alive),
+  "oce*temp*out"= lm(cal.length~oce*temp*ran.out,growth.alive),
+  "oce*bin*out"=lm(cal.length~oce*bin*ran.out,growth.alive),
+  "bin*out*temp" = lm(cal.length~bin*ran.out*temp,growth.alive),
   
-  "pop*temp*oce*bin"= glm(cal.length~pop*oce*temp*bin,growth.alive,family=gaussian),
-  "pop*temp*oce*out" = glm(cal.length~pop*oce*temp*ran.out,growth.alive,family=gaussian),
-  "temp*oce*bin*out"= glm(cal.length~bin*oce*temp*ran.out,growth.alive,family=gaussian),
+  "pop*temp*oce*bin"= lm(cal.length~pop*oce*temp*bin,growth.alive),
+  "pop*temp*oce*out" = lm(cal.length~pop*oce*temp*ran.out,growth.alive),
+  "temp*oce*bin*out"= lm(cal.length~bin*oce*temp*ran.out,growth.alive),
   
-  "fulli" = glm(cal.length~pop*temp*oce*bin*ran.out,growth.alive,family=gaussian))
+  "fulli" = lm(cal.length~pop*temp*oce*bin*ran.out,growth.alive))
 
 aictab(models)
 
-#best models only contain the population and comon garden temperature. This is what we will base our segmented regression off of
-summary(models$"pop.temp")
+```
+Here, we see that a few models are well supported. We choose the interactive pop*temp model only because 1) the additive model only tells us if populations are different at each temperature, while the additive model also tells us the populations slopes with temperature and gives us a TPC 2) oce adds nothing to the models, so is removed. 3) Looking at our coplots of bin, bin had no effect on growth. 
 
-
-hist(resid(models$"pop*temp"),main="",xlab="residuals")
-#normal 
-
-plot(resid(models$"pop*temp")~growth.alive$temp)
-plot(resid(models$"pop*temp")~growth.alive$pop)
-#plot residuals 
+```{r,echo=F}
+summary(models$"pop*temp")
 
 ```
 
-So there may be a little off with the data, the reisdials plot seems to indiciate. What to do?
-
 ## Broken Stick regression
 
-It's hard to compare TPC against one another. One method we've settled on is the use of broken stick regression to allow us to quantify the shape of the reaction as well as the thermael optima (x) and the maximal trait performance (y)
+It's hard to compare TPC against one another. One method we've settled on is the use of broken stick regression to allow us to quantify the shape of the reaction as well as the thermal optima (x) and the maximal trait performance (y). Here, we used the segmented package to create single-optima broken stick regressions that also allow us to extract optimas 
 
 ```{r,include=T,echo=F,warning=F}
+#create dataframes by population so 
 bf<-filter(growth.alive,pop=="Beaufort")
 fb<-filter(growth.alive,pop=="Folly Beach")
 gb<-filter(growth.alive,pop=="Great Bay")
@@ -330,10 +399,9 @@ sk<-filter(growth.alive,pop=="Skidaway")
 wp<-filter(growth.alive,pop=="Willapa")
 wh<-filter(growth.alive,pop=="Woods Hole")
 
+#creates segmented models for each population over the common garden temperatures
 m.wh<-glm(cal.length~temp,wh,family=gaussian)
-#seg.wh<-segmented(m.wh,seg.Z = ~temp, psi=24)
-
-seg.wh<-segmented(m.wh,seg.Z = ~temp, psi=24,seg.control(maxit.glm=100),fix.npsi=T,n.boot=500)###hat's going on wrong in this line???))
+seg.wh<-segmented(m.wh,seg.Z = ~temp, psi=24,seg.control(maxit.glm=100),fix.npsi=T,n.boot=500)
 
 m.gb<-glm(cal.length~temp,gb,family=gaussian)
 seg.gb<-segmented(m.gb,seg.Z = ~temp, psi=24)
@@ -404,6 +472,7 @@ predicted.hm$cal.length<-predict(seg.hm,predicted.hm)
 predicted.hm$pop<-"hm"
 predicted.hm$oce<-"p"
 
+#combine predicted values into a single dataframe
 all.length.pred<-rbind(predicted.gb,predicted.wh,predicted.oy,predicted.bf,predicted.fb,predicted.sk,predicted.wp,predicted.hm)
 all.length.pred$population<-all.length.pred$pop
 all.length.pred$population<-factor(all.length.pred$population,levels=c("gb","wh","oy","bf","fb","sk","wp","hm"))
@@ -424,13 +493,16 @@ growth.alive$population<-factor(growth.alive$pop,levels=c("Great Bay","Woods Hol
 growth.alive$pop<-factor(growth.alive$pop,levels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"))
 
 
-##unified
+##unified breakpoints
 ggplot(all.length.pred,aes(x=temp,y=cal.length))+geom_line(aes(group=population,x=temp,y=cal.length,color=population,linetype=population,size=population))+
   ylab("Shell Length (mm)")+xlab("Common Garden Temperature (°C)")+theme_classic()+
   scale_x_continuous(breaks=c(16,20,24,26,28,30))+
   scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
   scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
   scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+theme(text=element_text(family="arial",size=22))
+#+geom_boxplot(data=growth.alive,aes(x=temp,y=cal.length,group=interaction(temp,pop),fill=pop))
+
+
 
 ##facetted with points
 ggplot(all.length.pred,aes(x=temp,y=cal.length))+geom_line(aes(group=pop,x=temp,y=cal.length,color=pop,linetype=pop,size=pop))+
@@ -441,38 +513,73 @@ ggplot(all.length.pred,aes(x=temp,y=cal.length))+geom_line(aes(group=pop,x=temp,
   scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="pop")+theme(text=element_text(family="arial",size=22))+geom_point(data=growth.alive,aes(x=temp,y=cal.length,group=pop))+facet_wrap(pop~.)+theme(legend.position = "none") 
 ```
 
-So this looks good! Only thing is that sometimes (maybe I can show in person), I will get completly different curve shapes, as if the analysis is bouncing back and forth. This begs the question, is it possible to stop this from happening?
+ Here, I show the segmented model fits both on a single plot and facetted to show spread of points. Just by eyeballing the results, we see that more or less the northern sites have optima above those of southern sites. We will test for this later. First, how confident are we in these breakpoints? The tests below tell us.
+ 
+*P-score: The P-score tests the null hypothesis for no difference in slopes, i.e. no breakpoint. If P is below 0.05, then there is a breakpoint. We see here that all p-scores are signficant, and thus breakpoints do exist in our data
+ 
+* Davies test: we perform this analysis, but is less powerful for one breakpoint analyses. I am not certain what this means, since the null hypothesis is no breakpoint but we get radically different results this way.
+ 
+*  CI Low/High: Confidence interval of the breakpoint
+ 
+* Breakpoint: Breakpoint
+ 
+ 
+```{r,echo=F,warning=F}
+scores<-data.frame("site" = c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),"P Score"=NA,"Davies Test"=NA,"CI Low"=NA,"CI High"=NA,"breakpoint"=NA)
+scores[1,2]<-pscore.test(seg.gb,~temp)[[5]]
+scores[2,2]<-pscore.test(seg.wh,~temp)[[5]]
+scores[3,2]<-pscore.test(seg.oy,~temp)[[5]]
+scores[4,2]<-pscore.test(seg.bf,~temp)[[5]]
+scores[5,2]<-pscore.test(seg.fb,~temp)[[5]]
+scores[6,2]<-pscore.test(seg.sk,~temp)[[5]]
+scores[7,2]<-pscore.test(seg.wp,~temp)[[5]]
+scores[8,2]<-pscore.test(seg.hm,~temp)[[5]]
 
-```{r}
-summary(seg.oy)
-intercept(seg.gb)
+scores[1,3]<-davies.test(seg.gb,~temp)[[5]]
+scores[2,3]<-davies.test(seg.wh,~temp)[[5]]
+scores[3,3]<-davies.test(seg.oy,~temp)[[5]]
+scores[4,3]<-davies.test(seg.bf,~temp)[[5]]
+scores[5,3]<-davies.test(seg.fb,~temp)[[5]]
+scores[6,3]<-davies.test(seg.sk,~temp)[[5]]
+scores[7,3]<-davies.test(seg.wp,~temp)[[5]]
+scores[8,3]<-davies.test(seg.hm,~temp)[[5]]
+
+scores[1,4]<-confint(seg.gb)[[2]]
+scores[2,4]<-confint(seg.wh)[[2]]
+scores[3,4]<-confint(seg.oy)[[2]]
+scores[4,4]<-confint(seg.bf)[[2]]
+scores[5,4]<-confint(seg.fb)[[2]]
+scores[6,4]<-confint(seg.sk)[[2]]
+scores[7,4]<-confint(seg.wp)[[2]]
+scores[8,4]<-confint(seg.hm)[[2]]
+
+scores[1,5]<-confint(seg.gb)[[3]]
+scores[2,5]<-confint(seg.wh)[[3]]
+scores[3,5]<-confint(seg.oy)[[3]]
+scores[4,5]<-confint(seg.bf)[[3]]
+scores[5,5]<-confint(seg.fb)[[3]]
+scores[6,5]<-confint(seg.sk)[[3]]
+scores[7,5]<-confint(seg.wp)[[3]]
+scores[8,5]<-confint(seg.hm)[[3]]
+
+scores[1,6]<-confint(seg.gb)[[1]]
+scores[2,6]<-confint(seg.wh)[[1]]
+scores[3,6]<-confint(seg.oy)[[1]]
+scores[4,6]<-confint(seg.bf)[[1]]
+scores[5,6]<-confint(seg.fb)[[1]]
+scores[6,6]<-confint(seg.sk)[[1]]
+scores[7,6]<-confint(seg.wp)[[1]]
+scores[8,6]<-confint(seg.hm)[[1]]
 
 
-pscore.test(seg.gb,~temp)
-pscore.test(seg.wh,~temp)
-pscore.test(seg.oy,~temp)#0.051
-pscore.test(seg.bf,~temp)
-pscore.test(seg.fb,~temp)
-pscore.test(seg.sk,~temp)
-pscore.test(seg.wp,~temp)
-pscore.test(seg.hm,~temp)
-
-davies.test(seg.gb,~temp)
-davies.test(seg.wh,~temp)#.718
-davies.test(seg.oy,~temp)#1
-davies.test(seg.bf,~temp)#.81
-davies.test(seg.fb,~temp)#.672
-davies.test(seg.sk,~temp)#.163
-davies.test(seg.wp,~temp)#.31
-davies.test(seg.hm,~temp)#.64
-
+scores
 ```
 
 ## Breakpoint analysis
 
 To be able to complete statistical analysis of the differences in TPC curves, I extracted the x and y componenets of each curve to give me the thermal optima and maximal trait performance, respectively.
 
-```{r,include=T,echo=F,warning=F}
+```{r,include=F,echo=F,warning=F}
 brkpts<-data.frame(matrix(,nrow=8,ncol=17))
 colnames(brkpts)<-c("pop","brkptx","brkpty","lat","mean","s.mean","q.mean","t.mean","oce","brkptx_se","se_lower","se_higher","brkpty_se","max","NA","brkptyq","brkptxq")
 
@@ -599,104 +706,115 @@ brkpts$oce<-ifelse(brkpts$pop=="Beaufort","a",ifelse(brkpts$pop=="Folly Beach","
 
 ```
 
-# Breakpoint Y
+### Breakpoint Y
 
 ```{r,include=T,echo=F,warning=F}
 ##Maximal trait performance (y)
 mods.brk<-list(
-  "null"=glm(brkpty~1,brkpts,family="gaussian"),
-  "lat"=glm(brkpty~lat+oce,brkpts,family="gaussian"),
-  "mean"=glm(brkpty~mean+oce,brkpts,family="gaussian"),
-  "s.mean"=glm(brkpty~s.mean+oce,brkpts,family="gaussian"),
-  "q.mean"=glm(brkpty~q.mean+oce,brkpts,family="gaussian"),
-  "t.mean"=glm(brkpty~t.mean+oce,brkpts,family="gaussian"),
-  "max"=glm(brkpty~max+oce,brkpts,family="gaussian"),
-  "*lat"=glm(brkpty~lat*oce,brkpts,family="gaussian"),
-  "*mean"=glm(brkpty~mean*oce,brkpts,family="gaussian"),
-  "*s.mean"=glm(brkpty~s.mean*oce,brkpts,family="gaussian"),
-  "*q.mean"=glm(brkpty~q.mean*oce,brkpts,family="gaussian"),
-  "*t.mean"=glm(brkpty~t.mean*oce,brkpts,family="gaussian"),
-  "*max"=glm(brkpty~max*oce,brkpts,family="gaussian")
+  "null"=lm(brkpty~1,brkpts),
+  "lat"=lm(brkpty~lat+oce,brkpts),
+  "mean"=lm(brkpty~mean+oce,brkpts),
+  "s.mean"=lm(brkpty~s.mean+oce,brkpts),
+  "q.mean"=lm(brkpty~q.mean+oce,brkpts),
+  "t.mean"=lm(brkpty~t.mean+oce,brkpts),
+  "max"=lm(brkpty~max+oce,brkpts),
+  "*lat"=lm(brkpty~lat*oce,brkpts),
+  "*mean"=lm(brkpty~mean*oce,brkpts),
+  "*s.mean"=lm(brkpty~s.mean*oce,brkpts),
+  "*q.mean"=lm(brkpty~q.mean*oce,brkpts),
+  "*t.mean"=lm(brkpty~t.mean*oce,brkpts),
+  "*max"=lm(brkpty~max*oce,brkpts)
   )
 
 aictab(mods.brk)
 ```
 
-One issue here (and actually in literally every one of these analyses I do) is that the null model does a better job then any of the other predictors! I've been assuming latitude as the best fit here.
+One issue here (and actually in literally every one of these analyses I do) is that the null model does a better job then any of the other predictors! I've been assuming latitude as the best fit here. 
 
 ```{r,include=T,warning=F}
 ##Maximal trait performance (y)
 
-brkptym<-(glm(brkpty~lat+oce,brkpts,family="gaussian"))
+brkptym<-(lm(brkpty~lat+oce,brkpts))
 summary(brkptym) 
 
 
 ggplot(brkpts,aes(x=lat,y=brkpty,color=oce,fill=oce),group=oce)+
   geom_point(size=3)+theme_classic()+
-  ylab("Maximal Trait Performance (mm)")+
+  ylab("Maximal Growth (mm)")+
   xlab("Latitude")+
   theme(text=element_text(family="arial",size=22))+
-    scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('#F8766D','#00BFC4'))+
-    scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('#F8766D','#00BFC4'))+
+    scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
+    scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
   geom_smooth(method='lm',se=F)
 ```
 
-Here, I see that both latitude and ocean significantly describe the trend in maximal trait performance. This means possible countergradient variation!
+Here, I see that both latitude and ocean significantly describe the trend in maximal trait performance. This means possible countergradient variation! The one weird point in the Atlantic is Woods Hole. Anecdotally, I could attribute this to the very hot local conditions in the estuary, but can't say for sure. 
 
 But what about the thermal optima?
 
-#Breakpoint X
+### Breakpoint X
 
 ```{r,include=T,echo=F,warning=F}
 
-#sensitivity analysis - exclude woods hole?
-#brkpts<-filter(brkpts,pop!="Woods Hole")
+
 
 mods.brkx<-list(
-  "null"=glm(brkptx~1,brkpts,family="gaussian"),
-  "lat"=glm(brkptx~lat+oce,brkpts,family="gaussian"),
-  "mean"=glm(brkptx~mean+oce,brkpts,family="gaussian"),
-  "s.mean"=glm(brkptx~s.mean+oce,brkpts,family="gaussian"),
-  "q.mean"=glm(brkptx~q.mean+oce,brkpts,family="gaussian"),
-  "t.mean"=glm(brkptx~t.mean+oce,brkpts,family="gaussian"),
-    "max"=glm(brkptx~max+oce,brkpts,family="gaussian"),
-  "*lat"=glm(brkptx~lat*oce,brkpts,family="gaussian"),
-  "*mean"=glm(brkptx~mean*oce,brkpts,family="gaussian"),
-  "*s.mean"=glm(brkptx~s.mean*oce,brkpts,family="gaussian"),
-  "*q.mean"=glm(brkptx~q.mean*oce,brkpts,family="gaussian"),
-  "*t.mean"=glm(brkptx~t.mean*oce,brkpts,family="gaussian"),
-  "*max"=glm(brkptx~max*oce,brkpts,family="gaussian")
+  "null"=lm(brkptx~1,brkpts),
+  "lat"=lm(brkptx~lat+oce,brkpts),
+  "mean"=lm(brkptx~mean+oce,brkpts),
+  "s.mean"=lm(brkptx~s.mean+oce,brkpts),
+  "q.mean"=lm(brkptx~q.mean+oce,brkpts),
+  "t.mean"=lm(brkptx~t.mean+oce,brkpts),
+    "max"=lm(brkptx~max+oce,brkpts),
+  "*lat"=lm(brkptx~lat*oce,brkpts),
+  "*mean"=lm(brkptx~mean*oce,brkpts),
+  "*s.mean"=lm(brkptx~s.mean*oce,brkpts),
+  "*q.mean"=lm(brkptx~q.mean*oce,brkpts),
+  "*t.mean"=lm(brkptx~t.mean*oce,brkpts),
+  "*max"=lm(brkptx~max*oce,brkpts)
   )
 
 aictab(mods.brkx)
 
-brkptym<-glm(brkptx~lat+oce,brkpts,family="gaussian")
+brkptym<-lm(brkptx~lat+oce,brkpts)
 summary(brkptym)
 
-#weighted regression?
 ggplot(brkpts,aes(x=lat,y=brkptx,color=oce),group=interaction(oce))+
   geom_point(size=3)+geom_smooth(aes(group=oce),method="lm",se=F)+theme_classic()+
   ylab("Thermal Optima")+
   xlab("latitude")+
   theme(text=element_text(family="arial",size=22))+
-  scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('#F8766D','#00BFC4'))+
-  scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('#F8766D','#00BFC4'))
+  scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
+  scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))
   
 
 ```
-So here, because I have the standard error for the x breakpoint available, I tried weighting my analysis using the standard error.Would it make sense to do this, or just have the error bars on the points themselves?
 
-Once again, null model is best! Once again, I go with lat as the best predictor. In this case, however, we see that thermal optima does not trend signficantly upward with latitude. 
+
+Once again, null model is best! Once again, I go with lat as the best predictor. In this case, however, we see that thermal optima does not trend signficantly upward with latitude. I can attribute this insignicance mostly to the presence of the Woods Hole population. If we remove this, the trend becomes signficant.
+
+```{r,include=T,echo=F,warning=F}
+
+#sensitivity analysis - exclude woods hole
+brkpts_wh<-filter(brkpts,pop!="Woods Hole")
+
+
+brkptym_wh<-lm(brkptx~lat+oce,brkpts_wh)
+summary(brkptym_wh)
+
+```
 
 ## Quadratic
 
-One reason we are checking quadratic is that sometimes the optima isn't the optima!
+One reason we are checking quadratic is that sometimes the optima isn't the optima! If you closely examine the segmented regressions, you see that in some cases the second segment's slope does not appear to be negative. Instead, it plateaus. This raises the question whether we can really define our breakpoint as optima. Potentially, we could interpret the breakpoints as the lowest temperature of maximum growth. At any rate, one idea is to redo all the analysis we just did for segmented regression but with a quadratic model, and seeing if we get a similar result in both the stacking but also the trends of the maximal growth and optima as we did with the segmented regression. 
 
-```{r}
+```{r,include=T,echo=F,warning=F}
 growth.alive<-na.omit(growth.alive)
+#some quick exploratory stats on the quadratic model - can we assume normality?
 quadm<-(glm(cal.length~poly(growth.alive$temp,2)+pop,growth.alive,family="gaussian"))
 hist(resid(quadm))
 plot(quadm)
+#we will say yes
 
 growth.alive$quad<-poly(growth.alive$temp,2)
 bf<-filter(growth.alive,pop=="Beaufort")
@@ -771,13 +889,12 @@ theme_classic()+labs(y="Shell Length (mm)",x="Temperature (°C)")+scale_x_contin
 
 
 
-ggplot(growth.alive,aes(y=cal.length,x=temp))+geom_smooth(method='lm',formula=y~poly(x,3),se=F)+geom_point()+facet_wrap(pop~.)
+
 ```
+Here, we see more or less similar patterns of cold pops stacked on warm pops. How do the breakpoints stack up?
 
-```{R}
-
-ggplot(predicted.oy,aes(x=temp,y=cal.length))+geom_line(aes(x=temp,y=cal.length))
-
+### X Breakpoint, Quadratic
+```{R,echo=F,warning=F}
 
 mods.brkyq<-list(
   "null"=glm(brkptyq~1,brkpts,family="gaussian"),
@@ -796,8 +913,9 @@ mods.brkyq<-list(
   )
 
 aictab(mods.brkyq)
+#mean is the most highly supported model this time. However, for replicability sake, let's see what happens when we use latitude
 
-brkptxmq<-glm(brkpty~lat+oce,brkpts,family="gaussian")
+brkptxmq<-glm(brkptyq~lat+oce,brkpts,family="gaussian")
 summary(brkptxmq)
 
 ggplot(brkpts,aes(x=lat,y=brkptyq,color=oce),group=interaction(oce))+
@@ -805,9 +923,13 @@ ggplot(brkpts,aes(x=lat,y=brkptyq,color=oce),group=interaction(oce))+
   ylab("Thermal Optima")+
   xlab("Latitude (degrees)")+
   theme(text=element_text(family="arial",size=22))+
-  scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('#F8766D','#00BFC4'))+
-  scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('#F8766D','#00BFC4'))
+  scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
+  scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))
+```
+This is not signficant in the slightest. part of the issue is that the quadratic optima for Oyster site is near 34C. Very unlikely! This is likely due to the very small breakpoint change in Oyster that is interpreted by the quadratic as a single slope. Basically, nothing predicts it well
 
+### Y Breakpoint, Quadratic
+```{r,echo=F,warning=F}
 mods.brkxq<-list(
   "null"=glm(brkptxq~1,brkpts,family="gaussian"),
   "lat"=glm(brkptxq~lat+oce,brkpts,family="gaussian"),
@@ -824,21 +946,25 @@ mods.brkxq<-list(
 
 aictab(mods.brkxq)
 
-brkptxmq<-glm(brkptx~q.mean+oce,brkpts,family="gaussian")
+brkptxmq<-glm(brkptxq~lat+oce,brkpts,family="gaussian")
 summary(brkptxmq)
 
 ggplot(brkpts,aes(x=lat,y=brkptxq,color=oce),group=interaction(oce))+
   geom_point(size=3)+geom_smooth(aes(group=oce),method="lm",se=F)+theme_classic()+
-  ylab("Thermal Optima")+
+  ylab("Maximal Growth rate (mm)")+
   xlab("Latitude (degrees)")+
   theme(text=element_text(family="arial",size=22))+
-  scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('#F8766D','#00BFC4'))+
-  scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('#F8766D','#00BFC4'))
+  scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
+  scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))
 ```
-```{r}
 
-brkpts$pop<-unlist(brkpts$pop)
-write.csv(brkpts,"C:/Users/drewv/Documents/UMASS/data/growth_cal.csv",row.names=F)
+Here, we see that the maxima growth rate pattern is more or less preserved. While we don't trust the quadratic estimates for the optima, I do trust that there is a pattern of increasing growth rate with higher latitude. This is evidence for countergradient variation in growth. We can confirm this by looking further at growth in weight as well as in consumption rate. 
+
+
+```{r,include=F}
+
+#brkpts$pop<-unlist(brkpts$pop)
+#write.csv(brkpts,"C:/Users/drewv/Documents/UMASS/data/growth_cal.csv",row.names=F)
 ```
 
 
