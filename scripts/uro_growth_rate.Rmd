@@ -188,7 +188,7 @@ Source population of each snail
 
 ### temp
 
-Common garden temperature the snails were raised in for 24 hrs. Degrees C
+Common garden temperature the snails were raised in for 24 days. Degrees C
 
 ### hatch
 
