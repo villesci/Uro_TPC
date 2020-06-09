@@ -489,7 +489,13 @@ ggplot(all.cons.pred,aes(x=Temp,y=log_rate,group=Population))+geom_line(aes(grou
    brkpts_con[8,13]<-q[9,4]
    
    brkpts_con$oce<-ifelse(brkpts_con$pop=="Beaufort","a",ifelse(brkpts_con$pop=="Folly Beach","a",ifelse(brkpts_con$pop=="Great Bay","a",ifelse(brkpts_con$pop=="Humboldt","p",ifelse(brkpts_con$pop=="Oyster","a",ifelse(brkpts_con$pop=="Tomales","p",ifelse(brkpts_con$pop=="Woods Hole","a",ifelse(brkpts_con$pop=="Willapa","p",ifelse(brkpts_con$pop=="Skidaway","a",NA)))))))))
-   
+```
+
+# Breakpoint analysis
+
+## Breakpoint, y 
+
+```{r}
    ###################################3
    #y point (trait performance)
   #brkpts_con<-filter(brkpts_con,pop!="Skidaway")
@@ -516,7 +522,9 @@ ggplot(all.cons.pred,aes(x=Temp,y=log_rate,group=Population))+geom_line(aes(grou
    ggplot(brkpts_con,aes(x=mean,y=brkpty,color=oce,fill=oce),group=oce)+
       geom_point(size=3)+theme_classic()+geom_smooth(method="lm",se=F)+ylab(label="Rate of Consumption") 
    
-   ###############################################3
+```
+```{r}
+     ###############################################3
    #x point (t opt)
    mods.brk_con<-list(
       "null"=glm(brkptx~1,brkpts_con,family="gaussian"),
