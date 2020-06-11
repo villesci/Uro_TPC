@@ -9,9 +9,24 @@ output:
 ---
 
 
-# The Study
+# The Study - read first
 
-For this part of the study, we measured growth rates of juvenile snails. We measured snails within two days of them hatching, and grew them in tea strainers separated by population for 24 days. Nine replicates per population were distributed in six temperatures, with three groups of three subreplicates in each temperature/population treatment. The end length was recorded, and we substracted the starting length from the beginning length to get the growth rate (over 24 days).
+For this part of the study, we measured growth rates of juvenile Urosalpinx snails. We measured snail length using ImageJ within two days of hatching, and grew them in tea strainers separated by population for 24 days in a common garden experiment. Nine replicates per population were distributed in six temperatures, with three groups of three subreplicates in each temperature/population treatment. Snails were given food ad libitum. The end length was recorded using digital calipers ater 24 days, and we substracted the starting length from the beginning length to get the growth rate (over 24 days; see data exploration for reasoning). From this growth data, we can create thermal performance curves (TPCs) for each population to show the growth response of Urosaplinx populations to a range of laboratory temperatures.
+
+The analysis of these growth curves requires two steps: 
+
+1) the creation of models that describe the curved TPC shape using segmented and quadratic models and
+
+2) the extraction of breakpoints (thermal optima = x breakpoint, maximal trait performance = y optima) for each population's TPC and modeling which environmental factors best describe any patterns in these optima across populations. I do this across two methods - segmented and quadratic regression. We want to see if both methods give approximately the same results, and based on model outputs decide which method we should use.
+
+These two steps are presente, separately, in the Data Analysis section. The organization of these analyses are thus:
+
+* Broken stick regression - I create, analyze, and plot segmented regressions 
+  * Breakpoint analysis, broken stick - I extract the thermal optima (x brkpt) and maximal trait performance (y brkpt) of each population's segmented regression
+
+* Quadratic model - I create, analyze, and plot quadratic regressions. 
+  * Breakpoint analysis, quadratic - I extract the thermal optima (x brkpt) and maximal trait performance (y brkpt) of each population's quadratic regression
+  
 
 # Metadata
 
@@ -79,11 +94,6 @@ data.frame("site abbreviation" = c("gbj","wh","oy","bf","fb","gcsk","nah1516","h
 
 # Data Setup
 
-We had to clean parts of the data to prepare it for analysis. The first issue we had to resolve was the extreme weight and caliper length outliers, which was clearly due to a misplaced decimal or missing 0 during data entry. In the silenced part of the markdown, this had to be corrected 5/432 times. 
-
-The second issue was that some snails ran out of food during the growth experiment, which could jeopardize our assumption of unlimited growth while in the common garden experiment. The vast majority (391/432) of snails never ran out of food. 40/432 ran out of food once, while 1/432 ran out of food twice. For the purposes of this experiment, we decided to include snails that missed a single meal during the entirity of the experiment, but removed the single case in which a snail ran out food twice. 
-
-The third issue was that some snails died, or went missing or were crushed, over the course of the experiment. We removed these snails from consideration at the timepoint they died or went missing. 
 
 ```{r setup, include=FALSE,echo=F}
 knitr::opts_chunk$set(echo = TRUE)
@@ -105,6 +115,7 @@ library(here)
 library(lubridate)
 library(plyr)
 library(tidyr)
+library(digest)
 loadfonts(device = "win")
 
 
@@ -127,6 +138,13 @@ cons$allcons<-ifelse(cons$all.consumed=="n","0",ifelse(cons$all.consumed=="y","1
 cons$allcons<-as.numeric(cons$allcons)
 
 consfilter<-cons%>%filter(all.consumed!="n")%>%group_by(TPC.Label)%>%dplyr::summarise(n=n())
+consfilter$TPC.Label<-as.character(consfilter$TPC.Label)
+
+
+#when did snails die, timepoint wise?
+conscase<-cons%>%filter(all.consumed!="n")%>%group_by(timepoint)%>%dplyr::summarise(n=n())
+conscase$n<-as.integer(conscase$n)
+
 
 #only 6212 ran out twice. Below we remove it. If we wanted to do all the snails that ran out, we would run the next line
 growth.alive<-subset(growth,code!=(6212))
@@ -283,6 +301,22 @@ temp$site<-factor(temp$site, levels=c("gbj","wh","oy","bf","fb","GCSK","nah15","
 #"Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"
 ```
 
+We had to clean parts of the data to prepare it for analysis. The first issue we had to resolve was the extreme weight and caliper length outliers, which was clearly due to a misplaced decimal or missing 0 during data entry (these data points were off by a factor of 10 from "correct" data). In the silenced part of the markdown, this had to be corrected 5/432 times. 
+
+The second issue was that some snails ran out of food during the growth experiment, which could jeopardize our assumption of unlimited growth while in the common garden experiment. We checked snail consumption three times over the course of the experiment, both to ensure snails had food but also to record which ones ran out of food. The vast majority (391/432) of snails never ran out of food. 40/432 ran out of food once, while 1/432 ran out of food twice. The plot below shows this breakdown, with snails that never ran out food removed. For the purposes of this experiment, we decided to include snails that missed a single meal during the entirity of the experiment, but removed the single case in which a snail ran out of food twice. 
+
+Further, the second plot below shows that most snails consumed all their food at timepoint 1, followed by timepoint 2 and finally timepoint 3 (seven snails ran out at t3)
+
+```{r,echo=F}
+
+ggplot(consfilter,aes(x=TPC.Label,y=n,group=TPC.Label))+geom_bar(stat="identity")+labs(x="Unique snail code",y="Number of times ran out of food")
+ggplot(conscase,aes(x=timepoint,y=n,group=timepoint))+geom_bar(stat="identity")
+
+
+```
+
+The third issue was that some snails died, or went missing or were crushed, over the course of the experiment. We removed these snails from consideration at the timepoint they died or went missing. 
+
 ## Environmental Data
 
 We extracted temperature data from each site. With this data, we calculated different environmental predictors that might explain patterns in growth. 
@@ -303,7 +337,7 @@ We extracted temperature data from each site. With this data, we calculated diff
 We also used latitude as a predictor (not shown in table below)
 ```{r,include=T,echo=F,warning=F}
 #plot of site temperatures
-ggplot(data=temp,aes(x=date,y=WTMP,color=site))+scale_color_viridis_d(name="Site",labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),option="D")+theme_classic()+geom_vline(xintercept = 152)+geom_vline(xintercept = 273)+ylab("SST (°C)")+xlab("")+scale_fill_discrete(name="Site",labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"))+scale_x_date(date_labels = "%b")+theme(text=element_text(family="sanserif",size=14))+stat_smooth(se=,size=2)+geom_point(alpha=0.0002,color="black",fill="white")+guides(color=guide_legend(override.aes=list(fill=NA)))+geom_hline(yintercept=10)
+ggplot(data=temp,aes(x=date,y=WTMP,color=site))+scale_color_viridis_d(name="Site",labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),option="D")+theme_classic()+geom_vline(xintercept = 152)+geom_vline(xintercept = 273)+ylab("SST (°C)")+xlab("")+scale_fill_discrete(name="Site",labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"))+scale_x_date(date_labels = "%b")+theme(text=element_text(family="sanserif",size=14))+stat_smooth(se=,size=2)+geom_point(alpha=0.0002,color="black",fill="white")+guides(color=guide_legend(override.aes=list(fill=NA)))
   
 
 
@@ -317,7 +351,7 @@ q
 
 ## Do sites differ? 
 
-Do populations differ in their growth rate? Here, ANOVA tells us that growth betwween sites are signficantly different. 
+Do populations differ in their growth rate across the common garden experiemnt? Here, ANOVA tells us that growth betwween sites are signficantly different. We are justified in pursuing population and temperature level differences. 
 ```{r,include=T,warning=F}
 
 anovasites<-(aov(cal.length~pop*temp,data=growth.alive))
@@ -329,7 +363,7 @@ growth.alive$pop<-as.factor(growth.alive$pop)
 
 ## Shell size by population
 
-Should we use end caliper lengths, or do we need to subtract initial caliper length from end caliper length? In other words, do initial caliper lengths differ, requiring us to standardize our growth rate? Here, we find that populations do differ in initial growth. Thus, we must standardize growth by creating a growth rate of Final size - initial size. The univariate boxplots below also show that while outliers do appear to be present, they can be attributed to population or temperature level differences. 
+Should we use end caliper lengths, or do we need to subtract initial caliper length from end caliper length? In other words, do initial caliper lengths differ, requiring us to standardize our growth rate? Here, we find that populations do differ in initial growth. Tukey post-hoc comparisons (silenced, in code) further support this. Thus, we must standardize growth by creating a growth rate of Final size - initial size. The univariate boxplots below also show that while outliers do appear to be present, they can be attributed to population or temperature level differences. 
 ```{r,echo=F}
 summary(aov(cal.length.start~pop,data=growth.alive))
 ```
@@ -359,9 +393,9 @@ Here, we see that cal length and weight are both highly correlated. Thus, we wil
 
 
 ## Residuals of full model
-Here, we investigate the residuals of the full model. 
+Here, we investigate the residuals of the full model (lm(cal.length~pop*temp*oce*bin,growth.alive)). This is to check if we need to transform our data, and if our assumptions of normality are warranted.  
 
-```{r,echo=F,warning=F}
+```{r,echo=T,warning=F}
 growth.alive<-na.omit(growth.alive)
 fulli<-(lm(cal.length~pop*temp*oce*bin,growth.alive))
 
@@ -371,7 +405,10 @@ skewness(growth.alive$cal.length)
 #negative skew
 growth.alive<-tidyr::drop_na(growth.alive)
 growth.alive<-na.omit(growth.alive)
+```
+Things look ok, but maybe log-transforming growth will improve our skew and residual plots.
 
+```{r,echo=T,warning=F}
 growth.alive$log_growth<-log(max(growth.alive$cal.length+1)-growth.alive$cal.length)
 fulli2<-(lm(log_growth~pop*temp*oce*bin,growth.alive))
 
@@ -381,11 +418,11 @@ hist(resid(fulli2))
 
 skewness(growth.alive$log_growth)
 ```
-While the log transformation improves the skewness slightly (silenced but in code), we will assume the distribution of residuals are normal and proceed with untransformed growth rate. 
+While the log transformation improves the skewness slightly, we will assume the distribution of residuals are normal and proceed with untransformed growth rate. 
 
 ## Coplots
 
-Other than temperature and population, which we control for, do we see different reactions depending on bin? Here, reactions appaer to be the same no matter what bin we used. Note: Margins were too big on this figure to include in the markdown - viewable in R console. 
+Other than temperature and population, which we control for, do we see different reactions depending on tupperware bin (our subreplication)? Here, reactions appaer to be the same no matter what bin we used. We do not need to include bin in our models (further supported by AIC below in data analysis). Note: Margins were too big on this figure to include in the markdown - viewable in R console. 
 ```{r,echo=F}
 #dev.off()
 #coplot(cal.length~temp |pop*bin,data=growth.alive)
@@ -459,13 +496,14 @@ models<-list(
 aictab(models)
 
 ```
-Here, we see that a few models are well supported. We choose the interactive pop*temp model only because 1) the additive model only tells us if populations are different at each temperature, while the additive model also tells us the populations slopes with temperature and gives us a TPC 2) oce adds nothing to the models, so is removed. 3) Looking at our coplots of bin, bin had no effect on growth. 
+Here, we see that a few models are well supported. We choose the interactive pop*temp model only because 1) the additive model only tells us if populations are different at each temperature, while the interactive model also tells us the populations slopes with temperature and gives us a TPC 2) oce adds nothing to the models, so is removed. 3) Looking at our coplots of bin, bin had no effect on growth. 
 
 ```{r,echo=F}
 summary(models$"pop*temp")
 
 ```
 
+Based on this supported model strucutre, we will construct segmented and quadratic models that follow this formulation: growth~pop*temp. 
 ## Broken Stick regression
 
 It's hard to compare TPC against one another. One method we've settled on is the use of broken stick regression to allow us to quantify the shape of the reaction as well as the thermal optima (x) and the maximal trait performance (y). Here, we used the segmented package to create single-optima broken stick regressions that also allow us to extract optimas.
@@ -599,7 +637,7 @@ ggplot(all.length.pred,aes(x=temp,y=cal.length))+geom_line(aes(group=pop,x=temp,
 
  Here, I show the segmented model fits both on a single plot and facetted to show spread of points. Just by eyeballing the results, we see that more or less the northern sites have optima above those of southern sites. We will test for this later. First, how confident are we in these breakpoints? The tests below tell us.
  
-*P-score: The P-score tests the null hypothesis for no difference in slopes, i.e. no breakpoint. If P is below 0.05, then there is a breakpoint. We see here that all p-scores are signficant, and thus breakpoints do exist in our data
+* P-score: The P-score tests the null hypothesis for no difference in slopes, i.e. no breakpoint. If P is below 0.05, then there is a breakpoint. We see here that all p-scores are signficant, and thus breakpoints do exist in our data
  
 * Davies test: we perform this analysis, but is less powerful for one breakpoint analyses. I am not certain what this means, since the null hypothesis is no breakpoint but we get radically different results this way.
  
@@ -659,9 +697,9 @@ scores[8,6]<-confint(seg.hm)[[1]]
 scores
 ```
 
-## Breakpoint analysis
+## Breakpoint analysis, broken stick
 
-To be able to complete statistical analysis of the differences in TPC curves, I extracted the x and y componenets of each curve to give me the thermal optima and maximal trait performance, respectively. This is silenced in code. Once we have extracted the thermal optima and maximal trait performance, we can move on to the relationship between environment and each breakpoint componenet. 
+To be able to complete statistical analysis of the differences in TPC curves, I extracted the x and y componenets of each curve to give me the thermal optima and maximal trait performance, respectively. This extraction is silenced in code. Once we have extracted the thermal optima and maximal trait performance, we can move on to the relationship between environment and each breakpoint componenet. 
 
 ```{r,include=F,echo=F,warning=F}
 brkpts<-data.frame(matrix(,nrow=8,ncol=19))
@@ -815,7 +853,9 @@ brkpts$pop<-as.factor(brkpts$pop)
 
 ```
 
-### Maximum trait Performance (y axis)
+### Maximum trait Performance (y axis), broken stick
+
+The AIC table below tells us which environmental predictors best describe the relationship of maximal trait performance across populations. 
 
 ```{r,include=T,echo=F,warning=F}
 ##Maximal trait performance (y)
@@ -850,7 +890,9 @@ mods.brk<-list(
 aictab(mods.brk)
 ```
 
-Here, it appears that the season length as calculated at 10C is the best predictor. This is followed by latitude and season length calculated at 16C. latitude doesn't tell us much about the environment, so let's take a look at how both season length metrics we calculated perform when calculating maximal trait performance.
+Here, it appears that the season length as calculated at 10C without ocean is the best predictor. This is followed by latitude, mean sst, and season length calculated at 16C, all without ocean. Latitude doesn't tell us much about the environment, so let's take a look at how both season length metrics we calculated perform when calculating maximal trait performance.
+
+#### Maximal trait performance, season length = 16 C
 
 ```{r,include=T,warning=F,echo=F}
 ##Maximal trait performance (y)
@@ -859,33 +901,38 @@ brkptym<-(lm(brkpty~seasonlength16,brkpts))
 summary(brkptym) 
 
 
-ggplot(brkpts,aes(x=seasonlength16,y=brkpty,color=oce))+
-  geom_point(size=3)+theme_classic()+
+ggplot(brkpts,aes(x=seasonlength16,y=brkpty))+
+  geom_point(size=3,aes(color=oce))+theme_classic()+
   ylab("Maximal Growth (mm)")+
   xlab("Season Length (days), 16C")+
   theme(text=element_text(family="arial",size=22))+
     scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
     scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
-  geom_smooth(method='lm',se=F)
+  geom_smooth(method='lm',se=F,color="black")
+```
+
+#### Maximal trait performance, season length = 10 C
+
+```{r,warning=F,echo=F}
 
 brkptym2<-(lm(brkpty~seasonlength10,brkpts))
 summary(brkptym2) 
 
-ggplot(brkpts,aes(x=seasonlength10,y=brkpty,color=oce,fill=oce),group=oce)+
-  geom_point(size=3)+theme_classic()+
+ggplot(brkpts,aes(x=seasonlength10,y=brkpty))+
+  geom_point(size=3,aes(color=oce))+theme_classic()+
   ylab("Maximal Growth (mm)")+
   xlab("Season Length (days), 10C")+
   theme(text=element_text(family="arial",size=22))+
     scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
     scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
-  geom_smooth(method='lm',se=F)
+  geom_smooth(method='lm',se=F,color="black")
 ```
 
 When we look at season length when calcualted at 10C, we see a signficant relationship between maximal trait performance and season length. This trend disappears when we calcualte it at 16C, mostly because our Pacific sites "ungroup" from the Atlantic sites. At 10C season length, we could be seeing possible countergradient variation! The one weird point in the Atlantic is Woods Hole. Anecdotally, I could attribute this to the very hot local conditions in the estuary, but can't say for sure. 
 
 But what about the thermal optima?
 
-### Thermal Optima (Breakpoint X axis)
+### Thermal Optima (Breakpoint X axis), broken stick
 
 ```{r,include=T,echo=F,warning=F}
 
@@ -924,8 +971,8 @@ aictab(mods.brkx)
 brkptym<-lm(brkptx~seasonlength10,brkpts)
 summary(brkptym)
 
-ggplot(brkpts,aes(x=seasonlength10,y=brkptx,color=oce),group=interaction(oce))+
-  geom_point(size=3)+geom_smooth(aes(group=oce),method="lm",se=F)+theme_classic()+
+ggplot(brkpts,aes(x=seasonlength10,y=brkptx))+
+  geom_point(size=3,aes(color=oce))+geom_smooth(method="lm",se=F,color="black")+theme_classic()+
   ylab("Thermal Optima")+
   xlab("Season Length (10C)")+
   theme(text=element_text(family="arial",size=22))+
@@ -937,6 +984,10 @@ ggplot(brkpts,aes(x=seasonlength10,y=brkptx,color=oce),group=interaction(oce))+
 
 
 Here, mean tempeature is the best predictor. However, season length 10 is also well-supported, so for consistency sake I present season length 10. There is no signficant pattern between season length and thermal optima (none with mean temp either). I can attribute this insignicance mostly to the presence of the Woods Hole population. If we remove this, the trend becomes slightly more signficant. It is worth pointing out this point and that because of our observations, we could attribute this outlier to other environmental effects, although I don't think we can actually eliminate it from analysis. 
+
+#### Sensitivity analysis
+
+Woods Hole seems to be an outlier for this pattern of decreasing thermal optima with season length. This is possibly due to very local-level effects of where we collected the woods hole population. what would happen if we remove it?
 
 ```{r,include=T,echo=F,warning=F}
 
@@ -976,8 +1027,8 @@ aictab(mods.brkx2)
 brkptym_wh<-lm(brkptx~seasonlength10,brkpts_wh)
 summary(brkptym_wh)
 
-ggplot(brkpts_wh,aes(x=seasonlength10,y=brkptx,color=oce),group=interaction(oce))+
-  geom_point(size=3)+geom_smooth(aes(group=oce),method="lm",se=F)+theme_classic()+
+ggplot(brkpts_wh,aes(x=seasonlength10,y=brkptx))+
+  geom_point(size=3,aes(color=oce))+geom_smooth(method="lm",se=F,color="black")+theme_classic()+
   ylab("Thermal Optima")+
   xlab("Season Length (10c)")+
   theme(text=element_text(family="arial",size=22))+
@@ -1080,12 +1131,14 @@ Here, we see more or less similar patterns of cold pops stacked on warm pops. Ho
 Before we extract quadratic breakpoints, let's line up segmented regression and quadratic regression and see if they look close. The curves do match up nicely, but the breakpoints will be different. 
 
 ```{r,warning=F,echo=F}
-ggplot(all.length.pred,aes(x=temp,y=cal.length))+geom_line(aes(group=pop,x=temp,y=cal.length,color=pop,linetype=pop,size=pop))+
+ggplot(all.length.pred,aes(x=temp,y=cal.length),group=pop)+geom_line(aes(group=pop,x=temp,y=cal.length,color=pop,linetype=pop,size=pop))+
   ylab("Shell Length (mm)")+xlab("Common Garden Temperature (°C)")+theme_classic()+
   scale_x_continuous(breaks=c(16,20,24,26,28,30))+
-  scale_linetype_manual(values=c(1,1,1,1,1,1,1,1),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="pop")+
+  scale_linetype_manual(values=c(1,1,1,1,1,1,2,2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="pop")+
   scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="pop")+
   scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="pop")+theme(text=element_text(family="arial",size=22))+geom_point(data=growth.alive,aes(x=temp,y=cal.length,group=pop))+facet_wrap(pop~.)+theme(legend.position = "none")+geom_smooth(method='lm',formula=y~poly(x,2),se=F,aes(color=pop,size=pop))
+
+
 ```
 
 ### Thermal optima (X Breakpoint), Quadratic
@@ -1122,11 +1175,11 @@ mods.brkyq<-list(
 aictab(mods.brkyq)
 #mean is the most highly supported model this time. 
 
-brkptxmq<-glm(brkptyq~mean+oce,brkpts,family="gaussian")
+brkptxmq<-glm(brkptyq~mean,brkpts,family="gaussian")
 summary(brkptxmq)
 
-ggplot(brkpts,aes(x=mean,y=brkptyq,color=oce),group=interaction(oce))+
-  geom_point(size=3)+geom_smooth(aes(group=oce),method="lm",se=F)+theme_classic()+
+ggplot(brkpts,aes(x=mean,y=brkptyq))+
+  geom_point(size=3,aes(color=oce))+geom_smooth(method="lm",se=F,color="black")+theme_classic()+
   ylab("Thermal Optima")+
   xlab("Mean (degrees C)")+
   theme(text=element_text(family="arial",size=22))+
@@ -1170,8 +1223,8 @@ aictab(mods.brkxq)
 brkptxmq<-glm(brkptxq~seasonlength10,brkpts,family="gaussian")
 summary(brkptxmq)
 
-ggplot(brkpts,aes(x=seasonlength10,y=brkptxq,color=oce),group=interaction(oce))+
-  geom_point(size=3)+geom_smooth(aes(group=oce),method="lm",se=F)+theme_classic()+
+ggplot(brkpts,aes(x=seasonlength10,y=brkptxq))+
+  geom_point(size=3,aes(color=oce))+geom_smooth(method="lm",se=F,color="black")+theme_classic()+
   ylab("Maximal Growth rate (mm)")+
   xlab("Season Length (days,10C)")+
   theme(text=element_text(family="arial",size=22))+
@@ -1184,7 +1237,7 @@ Here, we see that the maxima growth rate pattern is more or less preserved. Whil
 
 Finally, let us compare the breakpoints we have extracted from segmented and quadratic regression. We want to know if we see signficantly different results in methods, because if we do then we have to be careful about which once we select (seg v. quad). We see here that while thermal optima estimates differ signficantly between quad and seg, they do not when estimating maximal trait performance. Importantly, the sign of both relationships is the same. Therefore, we can be confident that our conclusion of countergradient variation in maximal trait peroformance is correct. 
 
-```{r}
+```{r,echo=F}
 brkptnewx<-gather(brkpts, modeltypex, x, c(brkptx,brkptyq)) 
 brkptnewy<-gather(brkpts,modeltypey,y,c(brkpty,brkptxq))
 

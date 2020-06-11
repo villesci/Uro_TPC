@@ -15,18 +15,22 @@ library(DHARMa)
 library(devtools) 
 library(AICcmodavg)
 library(lme4)
+library(glmmTMB)
 
 
 
 uro.con<-read.csv(here::here("data/uro.consumption2.csv"),header=T)
 uro.con$no.consumed<-as.character(uro.con$no.consumed)
 uro.con$no.consumed<-as.numeric(uro.con$no.consumed)
+
+uro.con<-subset(uro.con,TPC.Label!=(6212))
+
 #uro.con<-filter(uro.con,no.consumed > 0)
 ##why did I do this earlier??^ 
 
 #this step below goes one step beyond just filtering out snails that ran out of food at each timepoint. It removes each snail them categorically from analysis at all time points, which is extreme for lower timepoints but appropriate for the last timepoint.
 
-uro.con<-subset(uro.con,TPC.Label!=(6833)&TPC.Label!=(6831)&TPC.Label!=(6711)&TPC.Label!=(6632)&TPC.Label!=(6631)&TPC.Label!=(6611)&TPC.Label!=(6433)&TPC.Label!=(6422)&TPC.Label!=(6412)&TPC.Label!=(6411)&TPC.Label!=(6233)&TPC.Label!=(6212)&TPC.Label!=(6212)&TPC.Label!=(6111)&TPC.Label!=(5831)&TPC.Label!=(5813)&TPC.Label!=(5732)&TPC.Label!=(5731)&TPC.Label!=(5723)&TPC.Label!=(5711)&TPC.Label!=(5622)&TPC.Label!=(5531)&TPC.Label!=(5333)&TPC.Label!=(5313)&TPC.Label!=(5312)&TPC.Label!=(5213)&TPC.Label!=(5121)&TPC.Label!=(5112)&TPC.Label!=(4522)&TPC.Label!=(4521)&TPC.Label!=(4433)&TPC.Label!=(4432)&TPC.Label!=(4231)&TPC.Label!=(3821)&TPC.Label!=(3712)&TPC.Label!=(3433)&TPC.Label!=(3432)&TPC.Label!=(3421)&TPC.Label!=(3413)&TPC.Label!=(2422)&TPC.Label!=(2421)&TPC.Label!=(6832))
+#uro.con<-subset(uro.con,TPC.Label!=(6833)&TPC.Label!=(6831)&TPC.Label!=(6711)&TPC.Label!=(6632)&TPC.Label!=(6631)&TPC.Label!=(6611)&TPC.Label!=(6433)&TPC.Label!=(6422)&TPC.Label!=(6412)&TPC.Label!=(6411)&TPC.Label!=(6233)&TPC.Label!=(6212)&TPC.Label!=(6212)&TPC.Label!=(6111)&TPC.Label!=(5831)&TPC.Label!=(5813)&TPC.Label!=(5732)&TPC.Label!=(5731)&TPC.Label!=(5723)&TPC.Label!=(5711)&TPC.Label!=(5622)&TPC.Label!=(5531)&TPC.Label!=(5333)&TPC.Label!=(5313)&TPC.Label!=(5312)&TPC.Label!=(5213)&TPC.Label!=(5121)&TPC.Label!=(5112)&TPC.Label!=(4522)&TPC.Label!=(4521)&TPC.Label!=(4433)&TPC.Label!=(4432)&TPC.Label!=(4231)&TPC.Label!=(3821)&TPC.Label!=(3712)&TPC.Label!=(3433)&TPC.Label!=(3432)&TPC.Label!=(3421)&TPC.Label!=(3413)&TPC.Label!=(2422)&TPC.Label!=(2421)&TPC.Label!=(6832))
 
 
 
@@ -75,7 +79,7 @@ s.nah1516<-filter(nah1516,rdate>"2018-06-01 00:00:00" & rdate< "2018-09-30 00:00
 s.gcsk<-filter(gcsk,rdate>"2018-06-01 00:00:00" & rdate< "2018-09-30 00:00:00")
 
 ##Quartiles
-q<-data.frame("site" = c("gbj","wh","oy","bf","fb","nah1516","hmi2","to3","gcsk"),"quantile"=NA,"decile"=NA, "max"=NA, "mean"=NA,"summer mean"=NA)
+q<-data.frame("site" = c("gbj","wh","oy","bf","fb","nah1516","hmi2","to3","gcsk"),"quantile"=NA,"decile"=NA, "max"=NA, "mean"=NA,"summer mean"=NA,"seasonlength10"=NA,"seasonlength16"=NA)
 q[1,2]<-quantile(s.gbj$WTMP,0.75,type=1)
 q[2,2]<-quantile(s.wh$WTMP,0.75,type=1)
 q[3,2]<-quantile(s.oy$WTMP,0.75,type=1)
@@ -131,6 +135,28 @@ q[7,6]<-mean(s.hmi2$WTMP)
 q[8,6]<-mean(s.to3$WTMP)
 q[9,6]<-mean(s.gcsk$WTMP)
 
+#season length
+
+q[1,8]<-gbj%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>16)%>%tally
+q[2,8]<-wh%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>16)%>%tally
+q[3,8]<-oy%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>16)%>%tally
+q[4,8]<-bf%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>16)%>%tally
+q[5,8]<-fb%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>16)%>%tally
+q[6,8]<-nah1516%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>16)%>%tally
+q[7,8]<-hmi2%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>16)%>%tally
+q[8,8]<-to3%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>16)%>%tally
+q[9,8]<-gcsk%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>16)%>%tally
+
+q[1,7]<-gbj%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>10)%>%tally
+q[2,7]<-wh%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>10)%>%tally
+q[3,7]<-oy%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>10)%>%tally
+q[4,7]<-bf%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>10)%>%tally
+q[5,7]<-fb%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>10)%>%tally
+q[6,7]<-nah1516%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>10)%>%tally
+q[7,7]<-hmi2%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>10)%>%tally
+q[8,7]<-to3%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>10)%>%tally
+q[9,7]<-gcsk%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>10)%>%tally
+
 pac2<-rbind(hmi2,nah1516)
 atll<-rbind(gcsk,fb,bf,oy,wh,gbj)
 
@@ -147,6 +173,7 @@ temp$date<-as.Date(temp$rdate)
 
 temp$site<-factor(temp$site, levels=c("gbj","wh","oy","bf","fb","GCSK","nah15","hmi2"))
 #"Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"
+
 
 ```
 # The Study
@@ -268,7 +295,7 @@ binomOLRE2<-glmmTMB(no.consumed ~ Population *Temp  + (1|tank.replicate)+(1|TPC.
 binom2<-glmmTMB(no.consumed ~ Population *Temp  +(1|tank.replicate), uro.con3, family = "nbinom2",offset=(log(duration)))
 
 
-bbmle::AICctab(full,fullz,fullzOLRE,binomzOLRE,binomz,binomzOLRE2,binomz2,fullOLRE,binomOLRE,binom,binomOLRE2,binom2,fullzOLRE2)
+bbmle::AICctab(full,fullz,fullzOLRE,binomzOLRE,binomz,binomzOLRE2,binomz2,fullOLRE,binomOLRE,binom,binomOLRE2,binom2)
 #up in the air whether zero inflated helps.
 
 
@@ -337,8 +364,8 @@ seg.hm<-segmented(m.hm,seg.Z = ~Temp, psi=24)
 m.wp<-glm(no.consumed~Temp,wp,family=nbinom2,offset=log(duration))
 seg.wp<-segmented(m.wp,seg.Z = ~Temp, psi=24)
 
-xmin<-min(uro.con2$Temp,na.rm=T)
-xmax<-max(uro.con2$Temp,na.rm=T)
+xmin<-min(uro.con3$Temp,na.rm=T)
+xmax<-max(uro.con3$Temp,na.rm=T)
 
 all.length.seg<-list(seg.gb,seg.wh,seg.oy,seg.bf,seg.fb,seg.sk,seg.wp,seg.hm)
 
@@ -413,8 +440,8 @@ ggplot(all.cons.pred,aes(x=Temp,y=log_rate,group=Population))+geom_line(aes(grou
 ```{r,echo=F,warning=F}
 
  
-   brkpts_con<-data.frame(matrix(,nrow=8,ncol=13))
-   colnames(brkpts_con)<-c("pop","brkptx","brkpty","lat","mean","s.mean","q.mean","t.mean","oce","blank","brkptxq","brkptyq","max")
+   brkpts_con<-data.frame(matrix(,nrow=8,ncol=15))
+   colnames(brkpts_con)<-c("pop","brkptx","brkpty","lat","mean","s.mean","q.mean","t.mean","oce","blank","brkptxq","brkptyq","max","seasonlength10","seasonlength16")
    
    brkpts_con$pop<-list("Willapa","Humboldt","Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway")
    
@@ -488,7 +515,32 @@ ggplot(all.cons.pred,aes(x=Temp,y=log_rate,group=Population))+geom_line(aes(grou
    brkpts_con[7,13]<-q[5,4]
    brkpts_con[8,13]<-q[9,4]
    
+   
+#seasonlength10
+brkpts_con[1,14]<-q[6,7]
+brkpts_con[2,14]<-q[7,7]
+brkpts_con[3,14]<-q[1,7]
+brkpts_con[4,14]<-q[2,7]
+brkpts_con[5,14]<-q[3,7]
+brkpts_con[6,14]<-q[4,7]
+brkpts_con[7,14]<-q[5,7]
+brkpts_con[8,14]<-q[9,7]
+
+#seasonlength16
+brkpts_con[1,15]<-q[6,8]
+brkpts_con[2,15]<-q[7,8]
+brkpts_con[3,15]<-q[1,8]
+brkpts_con[4,15]<-q[2,8]
+brkpts_con[5,15]<-q[3,8]
+brkpts_con[6,15]<-q[4,8]
+brkpts_con[7,15]<-q[5,8]
+brkpts_con[8,15]<-q[9,8]
+
+   
    brkpts_con$oce<-ifelse(brkpts_con$pop=="Beaufort","a",ifelse(brkpts_con$pop=="Folly Beach","a",ifelse(brkpts_con$pop=="Great Bay","a",ifelse(brkpts_con$pop=="Humboldt","p",ifelse(brkpts_con$pop=="Oyster","a",ifelse(brkpts_con$pop=="Tomales","p",ifelse(brkpts_con$pop=="Woods Hole","a",ifelse(brkpts_con$pop=="Willapa","p",ifelse(brkpts_con$pop=="Skidaway","a",NA)))))))))
+   
+   brkpts_con$pop<-as.character(brkpts_con$pop)
+
 ```
 
 # Breakpoint analysis
@@ -501,23 +553,36 @@ ggplot(all.cons.pred,aes(x=Temp,y=log_rate,group=Population))+geom_line(aes(grou
   #brkpts_con<-filter(brkpts_con,pop!="Skidaway")
    
    mods.brk_con<-list(
-     "null"=glm(brkpty~1,brkpts_con,family="gaussian"),
-     "lat"=glm(brkpty~lat+oce,brkpts_con,family="gaussian"),
-     "mean"=glm(brkpty~mean+oce,brkpts_con,family="gaussian"),
-     "s.mean"=glm(brkpty~s.mean+oce,brkpts_con,family="gaussian"),
-     "*q.mean"=glm(brkpty~q.mean+oce,brkpts_con,family="gaussian"),
-     "*t.mean"=glm(brkpty~t.mean+oce,brkpts_con,family="gaussian"),
-     "*lat"=glm(brkpty~lat*oce,brkpts_con,family="gaussian"),
-     "*mean"=glm(brkpty~mean*oce,brkpts_con,family="gaussian"),
-     "*s.mean"=glm(brkpty~s.mean*oce,brkpts_con,family="gaussian"),
-     "*q.mean"=glm(brkpty~q.mean*oce,brkpts_con,family="gaussian"),
-     "*t.mean"=glm(brkpty~t.mean*oce,brkpts_con,family="gaussian"),
-     "max"=glm(brkpty~max+oce,brkpts_con,family="gaussian"),
-     "*max"=glm(brkpty~max*oce,brkpts_con,family="gaussian")
-     )
+  "nullo"=glm(brkpty~1,brkpts_con,family="gaussian"),
+  "lato"=glm(brkpty~lat+oce,brkpts_con,family="gaussian"),
+  "meano"=glm(brkpty~mean+oce,brkpts_con,family="gaussian"),
+  "s.meano"=glm(brkpty~s.mean+oce,brkpts_con,family="gaussian"),
+  "q.meano"=glm(brkpty~q.mean+oce,brkpts_con,family="gaussian"),
+  "t.meano"=glm(brkpty~t.mean+oce,brkpts_con,family="gaussian"),
+  "seasonlengtho10"=glm(brkpty~seasonlength10+oce,brkpts_con,family="gaussian"),
+  "seasonlengtho16"=glm(brkpty~seasonlength16+oce,brkpts_con,family="gaussian"),
+  "maxo"=glm(brkpty~max+oce,brkpts_con,family="gaussian"),
+  "lat"=glm(brkpty~lat,brkpts_con,family="gaussian"),
+  "mean"=glm(brkpty~mean,brkpts_con,family="gaussian"),
+  "s.mean"=glm(brkpty~s.mean,brkpts_con,family="gaussian"),
+  "q.mean"=glm(brkpty~q.mean,brkpts_con,family="gaussian"),
+  "t.mean"=glm(brkpty~t.mean,brkpts_con,family="gaussian"),
+  "seasonlength10"=glm(brkpty~seasonlength10,brkpts_con,family="gaussian"),
+  "seasonlength16"=glm(brkpty~seasonlength16,brkpts_con,family="gaussian"),
+  "omax"=glm(brkpty~max,brkpts_con,family="gaussian"),
+  "o*lat"=glm(brkpty~lat*oce,brkpts_con,family="gaussian"),
+  "o*mean"=glm(brkpty~mean*oce,brkpts_con,family="gaussian"),
+  "o*s.mean"=glm(brkpty~s.mean*oce,brkpts_con,family="gaussian"),
+  "o*q.mean"=glm(brkpty~q.mean*oce,brkpts_con,family="gaussian"),
+  "o*t.mean"=glm(brkpty~t.mean*oce,brkpts_con,family="gaussian"),
+  "o*seasonlength10"=glm(brkpty~seasonlength10*oce,brkpts_con,family="gaussian"),
+  "seasonlength16"=glm(brkpty~seasonlength16*oce,brkpts_con,family="gaussian"),
+  "o*max"=glm(brkpty~max*oce,brkpts_con,family="gaussian")
+  )
    
-   aictab(mods.brk_con)
-   summary(glm(brkpty~mean*oce,brkpts_con,family="gaussian"))
+   
+aictab(mods.brk_con)
+   summary(glm(brkpty~mean,brkpts_con,family="gaussian"))
    
    ggplot(brkpts_con,aes(x=mean,y=brkpty,color=oce,fill=oce),group=oce)+
       geom_point(size=3)+theme_classic()+geom_smooth(method="lm",se=F)+ylab(label="Rate of Consumption") 
@@ -527,25 +592,35 @@ ggplot(all.cons.pred,aes(x=Temp,y=log_rate,group=Population))+geom_line(aes(grou
      ###############################################3
    #x point (t opt)
    mods.brk_con<-list(
-      "null"=glm(brkptx~1,brkpts_con,family="gaussian"),
-      "lat"=glm(brkptx~lat+oce,brkpts_con,family="gaussian"),
-      "mean"=glm(brkptx~mean+oce,brkpts_con,family="gaussian"),
-      "s.mean"=glm(brkptx~s.mean+oce,brkpts_con,family="gaussian"),
-      "q.mean"=glm(brkptx~q.mean+oce,brkpts_con,family="gaussian"),
-      "t.mean"=glm(brkptx~t.mean+oce,brkpts_con,family="gaussian"),
-      "*q.mean"=glm(brkptx~q.mean+oce,brkpts_con,family="gaussian"),
-      "*t.mean"=glm(brkptx~t.mean+oce,brkpts_con,family="gaussian"),
-      "*lat"=glm(brkptx~lat*oce,brkpts_con,family="gaussian"),
-      "*mean"=glm(brkptx~mean*oce,brkpts_con,family="gaussian"),
-      "*s.mean"=glm(brkptx~s.mean*oce,brkpts_con,family="gaussian"),
-      "*q.mean"=glm(brkptx~q.mean*oce,brkpts_con,family="gaussian"),
-      "*t.mean"=glm(brkptx~t.mean*oce,brkpts_con,family="gaussian"),
-      "max"=glm(brkptx~max+oce,brkpts_con,family="gaussian"),
-      "*max"=glm(brkptx~max*oce,brkpts_con,family="gaussian")
-      )
+  "nullo"=glm(brkptx~1,brkpts_con,family="gaussian"),
+  "lato"=glm(brkptx~lat+oce,brkpts_con,family="gaussian"),
+  "meano"=glm(brkptx~mean+oce,brkpts_con,family="gaussian"),
+  "s.meano"=glm(brkptx~s.mean+oce,brkpts_con,family="gaussian"),
+  "q.meano"=glm(brkptx~q.mean+oce,brkpts_con,family="gaussian"),
+  "t.meano"=glm(brkptx~t.mean+oce,brkpts_con,family="gaussian"),
+  "seasonlengtho10"=glm(brkptx~seasonlength10+oce,brkpts_con,family="gaussian"),
+  "seasonlengtho16"=glm(brkptx~seasonlength16+oce,brkpts_con,family="gaussian"),
+  "maxo"=glm(brkptx~max+oce,brkpts_con,family="gaussian"),
+  "lat"=glm(brkptx~lat,brkpts_con,family="gaussian"),
+  "mean"=glm(brkptx~mean,brkpts_con,family="gaussian"),
+  "s.mean"=glm(brkptx~s.mean,brkpts_con,family="gaussian"),
+  "q.mean"=glm(brkptx~q.mean,brkpts_con,family="gaussian"),
+  "t.mean"=glm(brkptx~t.mean,brkpts_con,family="gaussian"),
+  "seasonlength10"=glm(brkptx~seasonlength10,brkpts_con,family="gaussian"),
+  "seasonlength16"=glm(brkptx~seasonlength16,brkpts_con,family="gaussian"),
+  "omax"=glm(brkptx~max,brkpts_con,family="gaussian"),
+  "o*lat"=glm(brkptx~lat*oce,brkpts_con,family="gaussian"),
+  "o*mean"=glm(brkptx~mean*oce,brkpts_con,family="gaussian"),
+  "o*s.mean"=glm(brkptx~s.mean*oce,brkpts_con,family="gaussian"),
+  "o*q.mean"=glm(brkptx~q.mean*oce,brkpts_con,family="gaussian"),
+  "o*t.mean"=glm(brkptx~t.mean*oce,brkpts_con,family="gaussian"),
+  "o*seasonlength10"=glm(brkptx~seasonlength10*oce,brkpts_con,family="gaussian"),
+  "seasonlength16"=glm(brkptx~seasonlength16*oce,brkpts_con,family="gaussian"),
+  "o*max"=glm(brkptx~max*oce,brkpts_con,family="gaussian")
+  )
    
    aictab(mods.brk_con)
-   summary(glm(brkptx~s.mean+oce,brkpts_con,family="gaussian"))
+   summary(glm(brkptx~mean,brkpts_con,family="gaussian"))
    
    ggplot(brkpts_con,aes(x=s.mean,y=brkptx,color=oce,fill=oce),group=oce)+
       geom_point(size=3)+theme_classic()+geom_smooth(method="lm",se=F)+ylab(label="Topt") 
@@ -555,75 +630,75 @@ ggplot(all.cons.pred,aes(x=Temp,y=log_rate,group=Population))+geom_line(aes(grou
    #################################################################################
    ##Quadratic
    
-   quadm<-(glm(no.consumed~poly(uro.con2$Temp,2)+Population,uro.con2,family=poisson,offset=log(duration)))
+   quadm<-(glm(no.consumed~poly(uro.con3$Temp,2)+Population,uro.con3,family=poisson,offset=log(duration)))
    hist(resid(quadm))
    plot(quadm)
    
   
-   bf<-filter(uro.con2,Population=="Beaufort")
-   fb<-filter(uro.con2,Population=="Folly Beach")
-   gb<-filter(uro.con2,Population=="Great Bay")
-   hm<-filter(uro.con2,Population=="Humboldt")
-   oy<-filter(uro.con2,Population=="Oyster")
-   sk<-filter(uro.con2,Population=="Skidaway")
-   wp<-filter(uro.con2,Population=="Willapa")
-   wh<-filter(uro.con2,Population=="Woods Hole")
+   bf<-filter(uro.con3,Population=="Beaufort")
+   fb<-filter(uro.con3,Population=="Folly Beach")
+   gb<-filter(uro.con3,Population=="Great Bay")
+   hm<-filter(uro.con3,Population=="Humboldt")
+   oy<-filter(uro.con3,Population=="Oyster")
+   sk<-filter(uro.con3,Population=="Skidaway")
+   wp<-filter(uro.con3,Population=="Willapa")
+   wh<-filter(uro.con3,Population=="Woods Hole")
    
-   xminq<-min(poly(uro.con2$Temp,2),na.rm=T)
-   xmaxq<-max(poly(uro.con2$Temp,2),na.rm=T)
+   xminq<-min(poly(uro.con3$Temp,2),na.rm=T)
+   xmaxq<-max(poly(uro.con3$Temp,2),na.rm=T)
    
    qmgb<-(glm(no.consumed~poly(gb$Temp,2,raw=T),gb,family=poisson,offset=log(duration)))
    cfgb<-coef(qmgb)
-   brkpts[3,11]<-(-cfgb[2]/(2*(cfgb[3])))
-   brkpts[3,12]<-cfgb[1]+cfgb[2]*brkpts[3,11]+cfgb[3]*(brkpts[3,11]^2)
+   brkpts_con[3,11]<-(-cfgb[2]/(2*(cfgb[3])))
+   brkpts_con[3,12]<-cfgb[1]+cfgb[2]*brkpts_con[3,11]+cfgb[3]*(brkpts_con[3,11]^2)
    
    qmwh<-(glm(no.consumed~poly(wh$Temp,2,raw=T),wh,family=poisson,offset=log(duration)))
    cfwh<-coef(qmwh)
-   brkpts[4,11]<-(-cfwh[2]/(2*(cfwh[3])))
-   brkpts[4,12]<-cfwh[1]+cfwh[2]*brkpts[4,11]+cfwh[3]*(brkpts[4,11]^2)
+   brkpts_con[4,11]<-(-cfwh[2]/(2*(cfwh[3])))
+   brkpts_con[4,12]<-cfwh[1]+cfwh[2]*brkpts_con[4,11]+cfwh[3]*(brkpts_con[4,11]^2)
    
    qmoy<-(glm(no.consumed~poly(oy$Temp,2,raw=T),oy,family=poisson,offset=log(duration)))
    cfoy<-coef(qmoy)
-   brkpts[5,11]<-(-cfoy[2]/(2*(cfoy[3])))
-   brkpts[5,12]<-cfoy[1]+cfoy[2]*brkpts[5,11]+cfoy[3]*(brkpts[5,11]^2)
+   brkpts_con[5,11]<-(-cfoy[2]/(2*(cfoy[3])))
+   brkpts_con[5,12]<-cfoy[1]+cfoy[2]*brkpts_con[5,11]+cfoy[3]*(brkpts_con[5,11]^2)
    
    qmbf<-(glm(no.consumed~poly(bf$Temp,2,raw=T),bf,family=poisson,offset=log(duration)))
    cfbf<-coef(qmbf)
-   brkpts[6,11]<-(-cfbf[2]/(2*(cfbf[3])))
-   brkpts[6,12]<-cfbf[1]+cfbf[2]*brkpts[6,11]+cfbf[3]*(brkpts[6,11]^2)
+   brkpts_con[6,11]<-(-cfbf[2]/(2*(cfbf[3])))
+   brkpts_con[6,12]<-cfbf[1]+cfbf[2]*brkpts_con[6,11]+cfbf[3]*(brkpts_con[6,11]^2)
    
    
    qmfb<-(glm(no.consumed~poly(fb$Temp,2,raw=T),fb,family=poisson,offset=log(duration)))
    cffb<-coef(qmfb)
-   brkpts[7,11]<-(-cffb[2]/(2*(cffb[3])))
-   brkpts[7,12]<-cffb[1]+cffb[2]*brkpts[7,11]+cffb[3]*(brkpts[7,11]^2)
+   brkpts_con[7,11]<-(-cffb[2]/(2*(cffb[3])))
+   brkpts_con[7,12]<-cffb[1]+cffb[2]*brkpts_con[7,11]+cffb[3]*(brkpts_con[7,11]^2)
    
    qmsk<-(glm(no.consumed~poly(sk$Temp,2,raw=T),sk,family=poisson,offset=log(duration)))
    cfsk<-coef(qmsk)
-   brkpts[8,11]<-(-cfsk[2]/(2*(cfsk[3])))
-   brkpts[8,12]<-cfsk[1]+cfsk[2]*brkpts[8,11]+cfsk[3]*(brkpts[8,11]^2)
+   brkpts_con[8,11]<-(-cfsk[2]/(2*(cfsk[3])))
+   brkpts_con[8,12]<-cfsk[1]+cfsk[2]*brkpts_con[8,11]+cfsk[3]*(brkpts_con[8,11]^2)
    
    qmwp<-(glm(no.consumed~poly(wp$Temp,2,raw=T),wp,family=poisson,offset=log(duration)))
    cfwp<-coef(qmwp)
-   brkpts[1,11]<-(-cfwp[2]/(2*(cfwp[3])))
-   brkpts[1,12]<-cfwp[1]+cfwp[2]*brkpts[1,11]+cfwp[3]*(brkpts[1,11]^2)
+   brkpts_con[1,11]<-(-cfwp[2]/(2*(cfwp[3])))
+   brkpts_con[1,12]<-cfwp[1]+cfwp[2]*brkpts_con[1,11]+cfwp[3]*(brkpts_con[1,11]^2)
    
    qmhm<-(glm(no.consumed~poly(hm$Temp,2,raw=T),hm,family=poisson,offset=log(duration)))
    cfhm<-coef(qmhm)
-   brkpts[2,11]<-(-cfhm[2]/(2*(cfhm[3])))
-   brkpts[2,12]<-cfhm[1]+cfhm[2]*brkpts[2,11]+cfhm[3]*(brkpts[2,11]^2)
+   brkpts_con[2,11]<-(-cfhm[2]/(2*(cfhm[3])))
+   brkpts_con[2,12]<-cfhm[1]+cfhm[2]*brkpts_con[2,11]+cfhm[3]*(brkpts_con[2,11]^2)
    
    
-   uro.con2$Population<-factor(uro.con2$Population,levels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"))
+   uro.con3$Population<-factor(uro.con3$Population,levels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"))
    
    #poisson graph - not a good visual
-  # ggplot(uro.con2,aes(y=no.consumed,x=Temp,group=Population,color=Population,linetype=Population))+
+  # ggplot(uro.con3,aes(y=no.consumed,x=Temp,group=Population,color=Population,linetype=Population))+
   #   scale_x_continuous(breaks=c(16,20,24,26,28,30))+
   #    scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
   #    scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
   #    scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
   #    theme_classic()+labs(y="Rate of Consumption",x="Temperature (?C)")+facet_wrap(Population~.)+geom_point()
-   ggplot(uro.con2,aes(y=rate,x=Temp,group=Population,linetype=Population))+
+   ggplot(uro.con3,aes(y=rate,x=Temp,group=Population,linetype=Population))+
       geom_smooth(method='glm',formula=y~poly(x,2),se=F,aes(color=Population,size=Population))+theme_classic()+
       scale_x_continuous(breaks=c(16,20,24,26,28,30))+
       scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
@@ -633,7 +708,7 @@ ggplot(all.cons.pred,aes(x=Temp,y=log_rate,group=Population))+geom_line(aes(grou
    
    
    
-   ggplot(uro.con2,aes(y=rate,x=Temp,group=Population,linetype=Population))+
+   ggplot(uro.con3,aes(y=rate,x=Temp,group=Population,linetype=Population))+
       geom_smooth(method='glm',formula=y~poly(x,2),se=F,aes(color=Population,size=Population))+theme_classic()+
       scale_x_continuous(breaks=c(16,20,24,26,28,30))+
       scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
@@ -643,27 +718,39 @@ ggplot(all.cons.pred,aes(x=Temp,y=log_rate,group=Population))+geom_line(aes(grou
    
    
    mods.brkyq<-list(
-      "null"=glm(brkptyq~1,brkpts_con,family="gaussian"),
-      "lat"=glm(brkptyq~lat+oce,brkpts_con,family="gaussian"),
-      "mean"=glm(brkptyq~mean+oce,brkpts_con,family="gaussian"),
-      "s.mean"=glm(brkptyq~s.mean+oce,brkpts_con,family="gaussian"),
-      "q.mean"=glm(brkptyq~q.mean+oce,brkpts_con,family="gaussian"),
-      "t.mean"=glm(brkptyq~t.mean+oce,brkpts_con,family="gaussian"),
-      "*lat"=glm(brkptyq~lat*oce,brkpts_con,family="gaussian"),
-      "*mean"=glm(brkptyq~mean*oce,brkpts_con,family="gaussian"),
-      "*s.mean"=glm(brkptyq~s.mean*oce,brkpts_con,family="gaussian"),
-      "*q.mean"=glm(brkptyq~q.mean*oce,brkpts_con,family="gaussian"),
-      "*t.mean"=glm(brkptyq~t.mean*oce,brkpts_con,family="gaussian"),
-      "max"=glm(brkptyq~max+oce,brkpts_con_con,family="gaussian"),
-      "*max"=glm(brkptyq~max*oce,brkpts_con_con,family="gaussian")
-   )
+    "nullo"=glm(brkptyq~1,brkpts_con,family="gaussian"),
+  "lato"=glm(brkptyq~lat+oce,brkpts_con,family="gaussian"),
+  "meano"=glm(brkptyq~mean+oce,brkpts_con,family="gaussian"),
+  "s.meano"=glm(brkptyq~s.mean+oce,brkpts_con,family="gaussian"),
+  "q.meano"=glm(brkptyq~q.mean+oce,brkpts_con,family="gaussian"),
+  "t.meano"=glm(brkptyq~t.mean+oce,brkpts_con,family="gaussian"),
+  "seasonlengtho10"=glm(brkptyq~seasonlength10+oce,brkpts_con,family="gaussian"),
+  "seasonlengtho16"=glm(brkptyq~seasonlength16+oce,brkpts_con,family="gaussian"),
+  "maxo"=glm(brkptyq~max+oce,brkpts_con,family="gaussian"),
+  "lat"=glm(brkptyq~lat,brkpts_con,family="gaussian"),
+  "mean"=glm(brkptyq~mean,brkpts_con,family="gaussian"),
+  "s.mean"=glm(brkptyq~s.mean,brkpts_con,family="gaussian"),
+  "q.mean"=glm(brkptyq~q.mean,brkpts_con,family="gaussian"),
+  "t.mean"=glm(brkptyq~t.mean,brkpts_con,family="gaussian"),
+  "seasonlength10"=glm(brkptyq~seasonlength10,brkpts_con,family="gaussian"),
+  "seasonlength16"=glm(brkptyq~seasonlength16,brkpts_con,family="gaussian"),
+  "omax"=glm(brkptyq~max,brkpts_con,family="gaussian"),
+  "o*lat"=glm(brkptyq~lat*oce,brkpts_con,family="gaussian"),
+  "o*mean"=glm(brkptyq~mean*oce,brkpts_con,family="gaussian"),
+  "o*s.mean"=glm(brkptyq~s.mean*oce,brkpts_con,family="gaussian"),
+  "o*q.mean"=glm(brkptyq~q.mean*oce,brkpts_con,family="gaussian"),
+  "o*t.mean"=glm(brkptyq~t.mean*oce,brkpts_con,family="gaussian"),
+  "o*seasonlength10"=glm(brkptyq~seasonlength10*oce,brkpts_con,family="gaussian"),
+  "seasonlength16"=glm(brkptyq~seasonlength16*oce,brkpts_con,family="gaussian"),
+  "o*max"=glm(brkptyq~max*oce,brkpts_con,family="gaussian")
+  )
    
    aictab(mods.brkyq)
    
-   brkptxmq<-glm(brkptyq~mean+oce,brkpts_con,family="gaussian")
+   brkptxmq<-glm(brkptyq~mean,brkpts_con,family="gaussian")
    summary(brkptxmq)
    
-   ggplot(brkpts_con,aes(x=lat,y=brkptyq,color=oce),group=interaction(oce))+
+   ggplot(brkpts_con,aes(x=mean,y=brkptyq,color=oce),group=interaction(oce))+
       geom_point(size=3)+geom_smooth(aes(group=oce),method="lm",se=F)+theme_classic()+
       ylab("Maximal Growth (g)")+
       xlab("Latitude (degrees)")+
@@ -672,28 +759,40 @@ ggplot(all.cons.pred,aes(x=Temp,y=log_rate,group=Population))+geom_line(aes(grou
       scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('#F8766D','#00BFC4'))
    
    mods.brkxq<-list(
-      "null"=glm(brkptxq~1,brkpts_con,family="gaussian"),
-      "lat"=glm(brkptxq~lat+oce,brkpts_con,family="gaussian"),
-      "mean"=glm(brkptxq~mean+oce,brkpts_con,family="gaussian"),
-      "s.mean"=glm(brkptxq~s.mean+oce,brkpts_con,family="gaussian"),
-      "q.mean"=glm(brkptxq~q.mean+oce,brkpts_con,family="gaussian"),
-      "t.mean"=glm(brkptxq~t.mean+oce,brkpts_con,family="gaussian"),
-      "*lat"=glm(brkptxq~lat*oce,brkpts_con,family="gaussian"),
-      "*mean"=glm(brkptxq~mean*oce,brkpts_con,family="gaussian"),
-      "*s.mean"=glm(brkptxq~s.mean*oce,brkpts_con,family="gaussian"),
-      "*q.mean"=glm(brkptxq~q.mean*oce,brkpts_con,family="gaussian"),
-      "*t.mean"=glm(brkptxq~t.mean*oce,brkpts_con,family="gaussian"),
-      "max"=glm(brkptxq~max+oce,brkpts_con_con,family="gaussian"),
-      "*max"=glm(brkptxq~max*oce,brkpts_con_con,family="gaussian")
-   )
+       "nullo"=glm(brkptxq~1,brkpts_con,family="gaussian"),
+  "lato"=glm(brkptxq~lat+oce,brkpts_con,family="gaussian"),
+  "meano"=glm(brkptxq~mean+oce,brkpts_con,family="gaussian"),
+  "s.meano"=glm(brkptxq~s.mean+oce,brkpts_con,family="gaussian"),
+  "q.meano"=glm(brkptxq~q.mean+oce,brkpts_con,family="gaussian"),
+  "t.meano"=glm(brkptxq~t.mean+oce,brkpts_con,family="gaussian"),
+  "seasonlengtho10"=glm(brkptxq~seasonlength10+oce,brkpts_con,family="gaussian"),
+  "seasonlengtho16"=glm(brkptxq~seasonlength16+oce,brkpts_con,family="gaussian"),
+  "maxo"=glm(brkptxq~max+oce,brkpts_con,family="gaussian"),
+  "lat"=glm(brkptxq~lat,brkpts_con,family="gaussian"),
+  "mean"=glm(brkptxq~mean,brkpts_con,family="gaussian"),
+  "s.mean"=glm(brkptxq~s.mean,brkpts_con,family="gaussian"),
+  "q.mean"=glm(brkptxq~q.mean,brkpts_con,family="gaussian"),
+  "t.mean"=glm(brkptxq~t.mean,brkpts_con,family="gaussian"),
+  "seasonlength10"=glm(brkptxq~seasonlength10,brkpts_con,family="gaussian"),
+  "seasonlength16"=glm(brkptxq~seasonlength16,brkpts_con,family="gaussian"),
+  "omax"=glm(brkptxq~max,brkpts_con,family="gaussian"),
+  "o*lat"=glm(brkptxq~lat*oce,brkpts_con,family="gaussian"),
+  "o*mean"=glm(brkptxq~mean*oce,brkpts_con,family="gaussian"),
+  "o*s.mean"=glm(brkptxq~s.mean*oce,brkpts_con,family="gaussian"),
+  "o*q.mean"=glm(brkptxq~q.mean*oce,brkpts_con,family="gaussian"),
+  "o*t.mean"=glm(brkptxq~t.mean*oce,brkpts_con,family="gaussian"),
+  "o*seasonlength10"=glm(brkptxq~seasonlength10*oce,brkpts_con,family="gaussian"),
+  "seasonlength16"=glm(brkptxq~seasonlength16*oce,brkpts_con,family="gaussian"),
+  "o*max"=glm(brkptxq~max*oce,brkpts_con,family="gaussian")
+  )
    
    aictab(mods.brkxq)
    
-   brkptxmq<-glm(brkptx~lat+oce,brkpts_con,family="gaussian")
+   brkptxmq<-glm(brkptxq~max,brkpts_con,family="gaussian")
    summary(brkptxmq)
    
-   ggplot(brkpts_con,aes(x=lat,y=brkptxq,color=oce),group=interaction(oce))+
-      geom_point(size=3)+geom_smooth(aes(group=oce),method="lm",se=F)+theme_classic()+
+   ggplot(brkpts_con,aes(x=max,y=brkptxq))+
+      geom_point(size=3,aes(color=oce))+geom_smooth(method="lm",se=F,color="black")+theme_classic()+
       ylab("Thermal Optima")+
       xlab("Latitude (degrees)")+
       theme(text=element_text(family="arial",size=22))+
