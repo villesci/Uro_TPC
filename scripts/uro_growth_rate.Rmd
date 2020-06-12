@@ -11,7 +11,7 @@ output:
 
 # The Study - read first
 
-For this part of the study, we measured growth rates of juvenile Urosalpinx snails. We measured snail length using ImageJ within two days of hatching, and grew them in tea strainers separated by population for 24 days in a common garden experiment. Nine replicates per population were distributed in six temperatures, with three groups of three subreplicates in each temperature/population treatment. Snails were given food ad libitum. The end length was recorded using digital calipers ater 24 days, and we substracted the starting length from the beginning length to get the growth rate (over 24 days; see data exploration for reasoning). From this growth data, we can create thermal performance curves (TPCs) for each population to show the growth response of Urosaplinx populations to a range of laboratory temperatures.
+For this part of the study, we measured growth rates of juvenile Urosalpinx snails. We measured snail length using ImageJ within two days of hatching, and grew them in tea strainers separated by population for 24 days in a common garden experiment. Nine replicates per population were distributed in six temperatures, with three groups of three subreplicates in each temperature/population treatment. Snails were given food ad libitum. The end length was recorded using digital calipers after 24 days, and we substracted the starting length from the beginning length to get the growth rate (over 24 days; see data exploration for reasoning). From this growth data, we can create thermal performance curves (TPCs) for each population to show the growth response of Urosaplinx populations to a range of laboratory temperatures.
 
 The analysis of these growth curves requires two steps: 
 
@@ -19,7 +19,7 @@ The analysis of these growth curves requires two steps:
 
 2) the extraction of breakpoints (thermal optima = x breakpoint, maximal trait performance = y optima) for each population's TPC and modeling which environmental factors best describe any patterns in these optima across populations. I do this across two methods - segmented and quadratic regression. We want to see if both methods give approximately the same results, and based on model outputs decide which method we should use.
 
-These two steps are presente, separately, in the Data Analysis section. The organization of these analyses are thus:
+These two steps are presented, separately, in the Data Analysis section. The organization of these analyses thusly:
 
 * Broken stick regression - I create, analyze, and plot segmented regressions 
   * Breakpoint analysis, broken stick - I extract the thermal optima (x brkpt) and maximal trait performance (y brkpt) of each population's segmented regression
@@ -153,10 +153,19 @@ growth.alive<-subset(growth,code!=(6212))
 ##step beyod simply removing measurements when snails ran out of food. 
 #growth.alive<-subset(growth,code!=(6833)&code!=(6831)&code!=(6711)&code!=(6632)&code!=(6631)&code!=(6611)&code!=(6433)&code!=(6422)&code!=(6412)&code!=(6411)&code!=(6233)&code!=(6212)&code!=(6212)&code!=(6111)&code!=(5831)&code!=(5813)&code!=(5732)&code!=(5731)&code!=(5723)&code!=(5711)&code!=(5622)&code!=(5531)&code!=(5333)&code!=(5313)&code!=(5312)&code!=(5213)&code!=(5121)&code!=(5112)&code!=(4522)&code!=(4521)&code!=(4433)&code!=(4432)&code!=(4231)&code!=(3821)&code!=(3712)&code!=(3433)&code!=(3432)&code!=(3421)&code!=(3413)&code!=(2422)&code!=(2421)&code!=(6832))
 
+#how many died? 37
+dead<-growth.alive%>%filter(alive=="n")%>%group_by(temp)%>%dplyr::summarise(n=n())
+
+deadpop<-growth.alive%>%filter(alive=="n")%>%group_by(pop)%>%dplyr::summarise(n=n())
+
+#how many disappeared/unknown?
+dis<-growth.alive%>%filter(alive=="m")%>%dplyr::summarise(n=n())
+
+
 
 ##eliminate all snails that died/unknown. "n" = died, "m' = unknown (escaped, crushed, etc. ) 
 growth.alive<-growth.alive[!(growth.alive$alive=="n"),]
-growth.alive<-growth.alive[!(growth$alive=="m"),]
+growth.alive<-growth.alive[!(growth.alive$alive=="m"),]
 growth.alive<-tidyr::drop_na(growth.alive)
 
 
@@ -315,7 +324,16 @@ ggplot(conscase,aes(x=timepoint,y=n,group=timepoint))+geom_bar(stat="identity")
 
 ```
 
-The third issue was that some snails died, or went missing or were crushed, over the course of the experiment. We removed these snails from consideration at the timepoint they died or went missing. 
+The third issue was that some snails died, or went missing, over the course of the experiment. 37 snails died, and 1 went missing. We removed these snails from consideration, as we could not get a final growth measurement. The two plots below show the distribution of dead snails across site and temperature. Intriguingly, snails tended to died at lower temperatures, especially at 16C. We will see later on this was the temperature of lowest growth as well. 
+
+```{r,echo=F}
+ggplot(dead,aes(x=temp,y=n))+geom_bar(stat="identity")+labs(x="Common Garden Temperature",y="Mortalities (n)")
+
+ggplot(deadpop,aes(x=pop,y=n))+geom_bar(stat="identity")+labs(x="Population",y="Mortalities (n)")
+
+```
+
+In, between removing snails that ran out of food twice (n=1), died (n=37), or went missing (n=1), there were 393 snails whos growth rates we kept. 
 
 ## Environmental Data
 
