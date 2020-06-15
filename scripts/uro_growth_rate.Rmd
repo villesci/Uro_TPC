@@ -522,6 +522,7 @@ summary(models$"pop*temp")
 ```
 
 Based on this supported model strucutre, we will construct segmented and quadratic models that follow this formulation: growth~pop*temp. 
+
 ## Broken Stick regression
 
 It's hard to compare TPC against one another. One method we've settled on is the use of broken stick regression to allow us to quantify the shape of the reaction as well as the thermal optima (x) and the maximal trait performance (y). Here, we used the segmented package to create single-optima broken stick regressions that also allow us to extract optimas.

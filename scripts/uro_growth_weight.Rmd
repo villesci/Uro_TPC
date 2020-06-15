@@ -7,6 +7,91 @@ output:
   html_document: default
   pdf_document: default
 ---
+
+# The Study - read first
+
+For this part of the study, we measured the total growth in grams of juvenile Urosalpinx snails. We grew snails in tea strainers separated by population for 24 days in a common garden experiment. Nine replicates per population were distributed in six temperatures, with three groups of three subreplicates in each temperature/population treatment. Snails were given food ad libitum. At the end of 24 days, we weighed the snails. Note that we did not take initial weights due to the small size of hatchling snails. Therefore, weights are not standardized for the growth period. This is especially pertinent since we found signficant differences in initial caliper length between populations, and a high correlation between length and weight (see data explroation). Therefore, results should be taken with a grain of salt. From this growth data, we can create thermal performance curves (TPCs) for each population to show the growth response of Urosaplinx populations to a range of laboratory temperatures.
+
+The analysis of these growth curves requires two steps: 
+
+1) the creation of models that describe the curved TPC shape using segmented and quadratic models and
+
+2) the extraction of breakpoints (thermal optima = x breakpoint, maximal trait performance = y optima) for each population's TPC and modeling which environmental factors best describe any patterns in these optima across populations. I do this across two methods - segmented and quadratic regression. We want to see if both methods give approximately the same results, and based on model outputs decide which method we should use.
+
+These two steps are presented, separately, in the Data Analysis section. The organization of these analyses thusly:
+
+* Broken stick regression - I create, analyze, and plot segmented regressions 
+  * Breakpoint analysis, broken stick - I extract the thermal optima (x brkpt) and maximal trait performance (y brkpt) of each population's segmented regression
+
+* Quadratic model - I create, analyze, and plot quadratic regressions. 
+  * Breakpoint analysis, quadratic - I extract the thermal optima (x brkpt) and maximal trait performance (y brkpt) of each population's quadratic regression
+  
+
+# Metadata
+
+* code
+
+  * Unique code for each indiviudal snail, corresponding to population, temperature treatment. First digit = temperature (1=16,2=20,3=24,4=26, 5=28, 6=30), second digit =  site (1=Willapa, 2=Humboldt, 3=Great Bay, 4=Woods Hole, 5=Oyster, 6=Beaufort, 7=Folly Beach, 8=Skidaway), third digit = tupperware bin number (1-3), fourth digit = snail replicate (1-3)
+
+* pop
+
+  * Source population of each snail. See data table below for list of site abbreivations with site. 
+
+* temp
+
+  * Common garden temperature the snails were raised in for 24 days. Degrees C
+
+* hatch
+
+  * hatch date of each snail from it's egg case (m/dd/yyyy)
+
+* exp.date
+
+  * Date on which hatchling snails were placed in the common garden experiment. Not more then 2 days from the hatch date. (m/dd/yyyy)
+
+* grow.date
+
+  * End date where growth measurements were taken. 24 days after exp.date, therefore no more then 26 days post hatch (m/dd/yyyy)
+
+* alive
+
+  * Tracks if snails survived the experient. m marks missing, n marks no, y marks yes
+
+* rem.oysters
+
+  * Was there a surplus of food at the end of the experiment? n marks no, y marks yes
+
+* cal.length.start
+
+  * caliper length of hatchlings upon entering the experment. We took photos of snails before entering snails into the experiment, and then used ImageJ to extract snail sizes. Size in mm
+
+* cal.length.end
+
+  * caliper length of hatchling at the end of the experiemnt. We took caliper measurements of the snails, as well as verifying the measurements using a subset of photographs in ImageJ. Size in mm
+
+* wt
+
+  * End weight of snail. Note that no initial starting weight was recorded. Weight in g.
+
+* ran.out
+
+  * Did the snail ever run out of food during the consumption experiment? 1 for yes, 0 for no
+
+* bin
+
+  * Bin number, controls subreplication. The third digit of the code. 
+
+* oce
+
+  * Ocean (Atlantic or Pacific)
+
+```{r,echo=F, warning=F}
+data.frame("site abbreviation" = c("gbj","wh","oy","bf","fb","gcsk","nah1516","hmi2"), "site"=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"))
+
+
+```
+
+# Data setup
 ```{r setup, include=FALSE,echo=F}
 knitr::opts_chunk$set(echo = TRUE)
 library(knitr)
@@ -36,18 +121,44 @@ growth[193,12]=.0151
 growth[232,12]=.023
 growth[268,12]=.0261
 
+#Let's bring in the consumption data, and see which snails ran out of food MORE than once. We will keep snails that ran out only once. 
+
+cons<-read.csv(here::here("data/uro.consumption2.csv"))
+cons<-na.omit(cons)
+
+cons$allcons<-ifelse(cons$all.consumed=="n","0",ifelse(cons$all.consumed=="y","1",NA))
+cons$allcons<-as.numeric(cons$allcons)
+
+consfilter<-cons%>%filter(all.consumed!="n")%>%group_by(TPC.Label)%>%dplyr::summarise(n=n())
+consfilter$TPC.Label<-as.character(consfilter$TPC.Label)
+
+
+#when did snails die, timepoint wise?
+conscase<-cons%>%filter(all.consumed!="n")%>%group_by(timepoint)%>%dplyr::summarise(n=n())
+conscase$n<-as.integer(conscase$n)
+
+
+
 growth<-subset(growth,code!=(6212))
 
 ###eliminate snails that ever ran out of food
 #growth<-subset(growth,code!=(6833)&code!=(6831)&code!=(6711)&code!=(6632)&code!=(6631)&code!=(6611)&code!=(6433)&code!=(6422)&code!=(6412)&code!=(6411)&code!=(6233)&code!=(6212)&code!=(6212)&code!=(6111)&code!=(5831)&code!=(5813)&code!=(5732)&code!=(5731)&code!=(5723)&code!=(5711)&code!=(5622)&code!=(5531)&code!=(5333)&code!=(5313)&code!=(5312)&code!=(5213)&code!=(5121)&code!=(5112)&code!=(4522)&code!=(4521)&code!=(4433)&code!=(4432)&code!=(4231)&code!=(3821)&code!=(3712)&code!=(3433)&code!=(3432)&code!=(3421)&code!=(3413)&code!=(2422)&code!=(2421))
 
+#how many died? 37
+dead<-growth%>%filter(alive=="n")%>%group_by(temp)%>%dplyr::summarise(n=n())
 
-growth.alive<-growth[!(growth$alive=="n"),]
+deadpop<-growth%>%filter(alive=="n")%>%group_by(pop)%>%dplyr::summarise(n=n())
 
-growth.alive<-growth.alive[!(growth$alive=="m"),]
-growth.alive.con<-growth.alive[!(growth$ran.out=="1"),]
-growth.alive.con<-na.omit(growth.alive.con)
-growth.alive<-na.omit(growth.alive)
+#how many disappeared/unknown?
+dis<-growth%>%filter(alive=="m")%>%dplyr::summarise(n=n())
+
+
+growth<-growth[!(growth$alive=="n"),]
+
+growth<-growth[!(growth$alive=="m"),]
+growth.con<-growth[!(growth$ran.out=="1"),]
+growth.con<-na.omit(growth.con)
+growth<-na.omit(growth)
 
 
 ##temeperature data
@@ -190,69 +301,55 @@ temp$date<-as.Date(temp$rdate)
 temp$site<-factor(temp$site, levels=c("gbj","wh","oy","bf","fb","GCSK","nah15","hmi2"))
 #"Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"
 ```
-# The Study
 
-For this part of the study, we measured growth rates of juvenile snails. We measured snails within two days of them hatching, and grew them in tea strainers separated by population for 24 days. Nine replicates per population were distributed in six temperatures, with three groups of three subreplicates in each temperature/population treatment. The beginning weight of the snails was not recorded, rather, we only have end weight of snails. Therefore, any results of weight analysis should be taken with a grain of salt, since we did not standardize growth rate in weight like we did in length. 
 
-## Metadata
 
-### code
 
-Unique code for each indiviudal snail, corresponding to population, temperature treatment
 
-### pop
+We had to clean parts of the data to prepare it for analysis. The first issue we had to resolve was the extreme weight and caliper length outliers, which was clearly due to a misplaced decimal or missing 0 during data entry (these data points were off by a factor of 10 from "correct" data). In the silenced part of the markdown, this had to be corrected 5/432 times. 
 
-Source population of each snail
+The second issue was that some snails ran out of food during the growth experiment, which could jeopardize our assumption of unlimited growth while in the common garden experiment. We checked snail consumption three times over the course of the experiment, both to ensure snails had food but also to record which ones ran out of food. The vast majority (391/432) of snails never ran out of food. 40/432 ran out of food once, while 1/432 ran out of food twice. The plot below shows this breakdown, with snails that never ran out food removed. For the purposes of this experiment, we decided to include snails that missed a single meal during the entirity of the experiment, but removed the single case in which a snail ran out of food twice. 
 
-### temp
+Further, the second plot below shows that most snails consumed all their food at timepoint 1, followed by timepoint 2 and finally timepoint 3 (seven snails ran out at t3)
 
-Common garden temperature the snails were raised in for 24 hrs. Degrees C
+```{r,echo=F}
 
-### hatch
+ggplot(consfilter,aes(x=TPC.Label,y=n,group=TPC.Label))+geom_bar(stat="identity")+labs(x="Unique snail code",y="Number of times ran out of food")
+ggplot(conscase,aes(x=timepoint,y=n,group=timepoint))+geom_bar(stat="identity")
 
-hatch date of each snail from it's egg case
 
-### exp.date
+```
 
-Date on which hatchling snails were placed in the common garden experiment. Not more then 2 days from the hatch date.
 
-### grow.date
+The third issue was that some snails died, or went missing, over the course of the experiment. 37 snails died, and 1 went missing. We removed these snails from consideration, as we could not get a final growth measurement. The two plots below show the distribution of dead snails across site and temperature. Intriguingly, snails tended to died at lower temperatures, especially at 16C. We will see later on this was the temperature of lowest growth as well. 
 
-End date where growth measurements were taken. 24 days after exp.date, therefore no more then 26 days post hatch
+```{r,echo=F}
+ggplot(dead,aes(x=temp,y=n))+geom_bar(stat="identity")+labs(x="Common Garden Temperature",y="Mortalities (n)")
 
-### alive
+ggplot(deadpop,aes(x=pop,y=n))+geom_bar(stat="identity")+labs(x="Population",y="Mortalities (n)")
 
-Tracks if snails survived the experient. m marks missing, n marks no, y marks yes
+```
 
-### rem.oysters
-
-Was there a surplus of food at the end of the experiment? n marks no, y marks yes
-
-### cal.length.start
-
-caliper length of hatchlings upon entering the experment. We took photos of snails before entering snails into the experiment, and then used ImageJ to extract snail sizes. Size in mm
-
-### cal.length.end
-
-caliper length of hatchling at the end of the experiemnt. We took caliper measurements of the snails, as well as verifying the measurements using a subset of photographs in ImageJ. Size in mm
-
-### wt
-
-End weight of snail. Note that no initial starting weight was recorded. Weight in g.
-
-### ran.out
-
-Did the snail ever run out of food during the consumption experiment? 1 for yes, 0 for no
-
-### bin
-
-Bin number, controls subreplication
-
-### oce
-
-Ocean 
+In, between removing snails that ran out of food twice (n=1), died (n=37), or went missing (n=1), there were 393 snails whos growth rates we kept. 
 
 ## Environmental Data
+
+We extracted temperature data from each site. With this data, we calculated different environmental predictors that might explain patterns in growth. 
+
+* "Quantile" (°C)  
+  *The average SST of the upper 75th percentile of summer months (06/01/2018 - 09/30/2018)
+* "Decile" (°C)
+  *The average SST of the upper 90th percentile of summer months (06/01/2018 - 09/30/2018)
+* "max" 
+  *The maximum SST value recorded during summer months (06/01/2018 - 09/30/2018)
+* "mean"  (°C)
+  *The mean SST of the site, calculated across the entire year
+* "summer mean" (°C)
+  *The mean SST of the site, calculated during the summer months (06/01/2018 - 09/30/2018)
+* "seasonlength10/16" (days)
+  *The number of days where the average daily temperature exceeded a threshold. Here, we use 16C, since this was our lowest temperature in experimentation and resulted in very slow growth (accelerates at 20C) - from Cheng et al. 2017. However, things become signicant when performed at 10C. We can also use 12.5C and get somewhat significant results, after the breakpoint for Oxygen consumption found in Schick's dissertation (Schick 1971) 
+
+We also used latitude as a predictor (not shown in table below)
 
 ```{r,include=T,echo=F,warning=F}
 #plot of site temperatures
@@ -265,48 +362,89 @@ q
 
 # Data Exploration
 
+## Do weights differ between populations
+
 Do populations differ in their weight? Here, ANOVA tells us that growth between sites are signficantly different
 ```{r,include=T,echo=F,warning=F}
 
-anovawt<-(aov(wt~pop*temp,data=growth.alive))
+anovawt<-(aov(wt~pop*temp,data=growth))
 summary(anovawt)
-growth.alive$pop<-as.factor(growth.alive$pop)
+growth$pop<-as.factor(growth$pop)
 
 ```
+
+## Full model residuals
 
 How do the residuals of a full model look? Here, they look acceptable. 
 
 ```{r}
-weight.model<-glm(wt~pop*temp*oce*bin*ran.out,growth.alive,family=gaussian)
+weight.model<-glm(wt~pop*temp*oce*bin*ran.out,growth,family=gaussian)
 plot(weight.model)
 hist(resid(weight.model),breaks=20)
 
-skewness(growth.alive$wt)
+skewness(growth$wt)
+
+```
+
+
+## Do sites differ? 
+
+Do populations differ in their final weight across the common garden experiemnt? Here, ANOVA tells us that growth between sites are signficantly different. We are justified in pursuing population and temperature level differences. 
+```{r,include=T,warning=F}
+
+anovasites<-(aov(wt~pop*temp,data=growth))
+summary(anovasites)
+growth$pop<-as.factor(growth$pop)
+
+
+```
+
+
+## Correlations
+```{r,include=T,echo=F,warning=F}
+M <- (growth[,9:12])
+chart.Correlation(M,histogram=TRUE)
+
+```
+
+Here, we see that cal length and weight are both highly correlated. Since we had previously found initial caliper length to be different between populations (see uro growth rate length markdown), we must keep this in mind when interpreting any results. 
+
+
+## Coplots
+
+Other than temperature and population, which we control for, do we see different reactions depending on tupperware bin (our subreplication)? Here, reactions appaer to be the same no matter what bin we used. We do not need to include bin in our models (further supported by AIC below in data analysis). Note: Margins were too big on this figure to include in the markdown - viewable in R console. 
+```{r,echo=F}
+#dev.off()
+#coplot(wt~temp |pop*bin,data=growth)
 
 ```
 # Data Analysis
 
-# Breakpoints
-```{r,echo=F,warning=F}
-bf<-filter(growth.alive, pop=="Beaufort")
-fb<-filter(growth.alive,pop=="Folly Beach")
-gb<-filter(growth.alive,pop=="Great Bay")
-hm<-filter(growth.alive,pop=="Humboldt")
-oy<-filter(growth.alive,pop=="Oyster")
-sk<-filter(growth.alive,pop=="Skidaway")
-wp<-filter(growth.alive,pop=="Willapa")
-wh<-filter(growth.alive,pop=="Woods Hole")
+## Broken Stick regression
 
-m1.2<-glm(wt~temp*pop,growth.alive,family=gaussian)
+It's hard to compare TPC against one another. One method we've settled on is the use of broken stick regression to allow us to quantify the shape of the reaction as well as the thermal optima (x) and the maximal trait performance (y). Here, we used the segmented package to create single-optima broken stick regressions that also allow us to extract optimas.
+
+We used a separate model for each population, as segmented does not allow for grouping. We used the following formulation: glm(weight ~ temperature, population,family=gaussian), such that we modeled the response of shell lengths from a single population to temperature.
+```{r,echo=F,warning=F}
+bf<-filter(growth, pop=="Beaufort")
+fb<-filter(growth,pop=="Folly Beach")
+gb<-filter(growth,pop=="Great Bay")
+hm<-filter(growth,pop=="Humboldt")
+oy<-filter(growth,pop=="Oyster")
+sk<-filter(growth,pop=="Skidaway")
+wp<-filter(growth,pop=="Willapa")
+wh<-filter(growth,pop=="Woods Hole")
+
+m1.2<-glm(wt~temp*pop,growth,family=gaussian)
 #"pop*temp" is the best model
 
 ##Extract residuals
 hist(resid(m1.2),main="",xlab="residuals")
 
-growth.alive<-na.omit(growth.alive)
-plot(resid(m1.2)~growth.alive$temp)
+growth<-na.omit(growth)
+plot(resid(m1.2)~growth$temp)
 #resids for temperatures look a little wonky.
-plot(resid(m1.2)~growth.alive$pop)
+plot(resid(m1.2)~growth$pop)
 
 m.gb<-glm(wt~temp,gb,family=gaussian)
 seg.gb<-segmented(m.gb,seg.z = ~temp, psi=24)
@@ -332,8 +470,8 @@ seg.hm<-segmented(m.hm,seg.Z = ~temp, psi=26)
 m.wp<-glm(wt~temp,wp,family=gaussian)
 seg.wp<-segmented(m.wp,seg.Z = ~temp, psi=26)
 
-xmin<-min(growth.alive$temp,na.rm=T)
-xmax<-max(growth.alive$temp,na.rm=T)
+xmin<-min(growth$temp,na.rm=T)
+xmax<-max(growth$temp,na.rm=T)
 
 ##plotting predicted values
 predicted.gb<-data.frame(temp=seq(xmin,xmax,length.out=100))
@@ -386,8 +524,8 @@ all.pred$population<-as.factor(all.pred$population)
 all.pred$population<-factor(all.pred$population,levels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"))
 
 
-growth.alive$population<-growth.alive$pop
-growth.alive$population<-factor(growth.alive$pop,levels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"))
+growth$population<-growth$pop
+growth$population<-factor(growth$pop,levels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"))
 
 ggplot(all.pred,aes(x=temp,y=wt,group=pop))+geom_line(aes(x=temp,y=wt,color=pop,linetype=pop,size=pop))+
   ylab("Weight(g)")+xlab("Common Garden Temperature")+theme_classic()+
@@ -402,7 +540,7 @@ ggplot(all.pred,aes(x=temp,y=wt,group=population))+geom_line(aes(x=temp,y=wt,col
   scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="population")+
   scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="population")+
   scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="population")+
-  geom_point(data=growth.alive,aes(x=temp,y=wt,group=population))+facet_wrap(population~.)+theme(legend.position = "none")+theme(text=element_text(family="arial",size=22))
+  geom_point(data=growth,aes(x=temp,y=wt,group=population))+facet_wrap(population~.)+theme(legend.position = "none")+theme(text=element_text(family="arial",size=22))
 
 ```
 
@@ -472,6 +610,9 @@ Through these tests, my trust in the accuracy of the breakpoints on the x axis i
 
 ## Breakpoints analysis 
 
+
+To be able to complete statistical analysis of the differences in TPC curves, I extracted the x and y componenets of each curve to give me the thermal optima and maximal trait performance, respectively. This extraction is silenced in code. Once we have extracted the thermal optima and maximal trait performance, we can move on to the relationship between environment and each breakpoint componenet. 
+
 ```{r,include=F}
 brkpts<-data.frame(matrix(,nrow=8,ncol=15))
 colnames(brkpts)<-c("pop","brkptx","brkpty","lat","mean","s.mean","q.mean","t.mean","oce","ratio","brkptxq","brkptyq","max","seasonlength10","seasonlength16")
@@ -497,10 +638,8 @@ brkpts[7,3]<-(seg.fb$psi[[2]]*coef(seg.fb)[[2]])+(coef(seg.fb)[[1]])
 brkpts[8,3]<-(seg.sk$psi[[2]]*coef(seg.sk)[[2]])+(coef(seg.sk)[[1]])
 
 #lat
-brkpts$lat<-ifelse(brkpts$pop=="Beaufort",34.819,ifelse(brkpts$pop=="Folly Beach",32.660525,
-                                                        ifelse(brkpts$pop=="Great Bay",43.089589,ifelse(brkpts$pop=="Humboldt",40.849448,ifelse(brkpts$pop=="Oyster",
-                                                                                                                                                37.288562,ifelse(brkpts$pop=="Tomales",38.12805,ifelse(brkpts$pop=="Woods Hole",41.57687,ifelse(brkpts$pop=="Willapa",46.5007,ifelse(brkpts$pop=="Skidaway",31.970
-                                                                                                                                                                                                                                                                                     ,NA)))))))))
+brkpts$lat<-ifelse(brkpts$pop=="Beaufort",34.819,ifelse(brkpts$pop=="Folly Beach",32.660525, ifelse(brkpts$pop=="Great Bay",43.089589,ifelse(brkpts$pop=="Humboldt",40.849448,ifelse(brkpts$pop=="Oyster", 37.288562,ifelse(brkpts$pop=="Tomales",38.12805,ifelse(brkpts$pop=="Woods Hole",41.57687,ifelse(brkpts$pop=="Willapa",46.5007,ifelse(brkpts$pop=="Skidaway",31.970,NA)))))))))                                                                                                                                                                                                                                                                                   
+
 #means
 brkpts[2,5]<-means[1,1]
 brkpts[8,5]<-means[3,1]
@@ -611,11 +750,10 @@ aictab(mods.brk)
 
 summary(lm(brkpty~seasonlength10,brkpts))
 
-##Topt for NSF
-brkptsnop<-brkpts
-brkptsnop$oce<-as.factor(brkptsnop$oce)
-#brkptsnop<-brkpts[!brkpts$oce=="p",]
-ggplot(brkptsnop,aes(x=seasonlength10,y=brkpty))+
+
+brkpts$oce<-as.factor(brkpts$oce)
+
+ggplot(brkpts,aes(x=seasonlength10,y=brkpty))+
   geom_point(size=3,aes(color=oce))+theme_classic()+
   ylab("Maximal Trait Performance (g)")+
   xlab("Season Length (days), 10C")+
@@ -626,7 +764,7 @@ ggplot(brkptsnop,aes(x=seasonlength10,y=brkpty))+
 
 ```
 
-Once again the null model wins out, but when we go with the next best supported model (latitude) we get a well supported, signficant relationship of increasing growth with increasing latitude. 
+Once again the null model wins out, but when we go with the next best supported model (seasonlength10) we get a well supported, signficant relationship of increasing growth with increasing season length 
 
 ### Breakpoint X
 
@@ -661,15 +799,12 @@ mods.brkx<-list(
   
 aictab(mods.brkx)
 
-#mean temperature is the most well supported. However for sake of keeping analysis consistent we will use latitude, also well supported 
-
-
 summary(lm(brkptx~seasonlength10,brkpts))
 
 ggplot(brkpts,aes(x=seasonlength10,y=brkptx))+
   geom_point(size=3,aes(color=oce))+theme_classic()+
   ylab("Thermal Optima")+
-  xlab("Mean Temperature")+
+  xlab("Season Length (days), 10C")+
   theme(text=element_text(family="arial",size=22))+
   scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
   scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+geom_smooth(color="black",method="lm",se=F)+theme(text=element_text(family="arial",size=22))
@@ -685,22 +820,22 @@ One reason we are checking quadratic is that sometimes the optima isn't the opti
 
 ```{r,echo=F,warning=F}
 #some quick data exploration
-quadm<-(glm(wt~poly(growth.alive$temp,2)+pop,growth.alive,family="gaussian"))
+quadm<-(glm(wt~poly(growth$temp,2)+pop,growth,family="gaussian"))
 hist(resid(quadm))
 plot(quadm)
 
-growth.alive$quad<-poly(growth.alive$temp,2)
-bf<-filter(growth.alive,pop=="Beaufort")
-fb<-filter(growth.alive,pop=="Folly Beach")
-gb<-filter(growth.alive,pop=="Great Bay")
-hm<-filter(growth.alive,pop=="Humboldt")
-oy<-filter(growth.alive,pop=="Oyster")
-sk<-filter(growth.alive,pop=="Skidaway")
-wp<-filter(growth.alive,pop=="Willapa")
-wh<-filter(growth.alive,pop=="Woods Hole")
+growth$quad<-poly(growth$temp,2)
+bf<-filter(growth,pop=="Beaufort")
+fb<-filter(growth,pop=="Folly Beach")
+gb<-filter(growth,pop=="Great Bay")
+hm<-filter(growth,pop=="Humboldt")
+oy<-filter(growth,pop=="Oyster")
+sk<-filter(growth,pop=="Skidaway")
+wp<-filter(growth,pop=="Willapa")
+wh<-filter(growth,pop=="Woods Hole")
 
-xminq<-min(poly(growth.alive$temp,2),na.rm=T)
-xmaxq<-max(poly(growth.alive$temp,2),na.rm=T)
+xminq<-min(poly(growth$temp,2),na.rm=T)
+xmaxq<-max(poly(growth$temp,2),na.rm=T)
 
 qmgb<-(lm(wt~poly(gb$temp,2,raw=T),gb))
 cfgb<-coef(qmgb)
@@ -744,16 +879,16 @@ brkpts[2,11]<-(-cfhm[2]/(2*(cfhm[3])))
 brkpts[2,12]<-cfhm[1]+cfhm[2]*brkpts[2,11]+cfhm[3]*(brkpts[2,11]^2)
 
 
-growth.alive$population<-factor(growth.alive$pop,levels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"))
+growth$population<-factor(growth$pop,levels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"))
 
 
-ggplot(growth.alive,aes(y=wt,x=temp,group=population,linetype=population))+geom_smooth(method='lm',formula=y~poly(x,2),se=F,aes(color=population,size=population))+geom_point()+facet_wrap(population~.)+
+ggplot(growth,aes(y=wt,x=temp,group=population,linetype=population))+geom_smooth(method='lm',formula=y~poly(x,2),se=F,aes(color=population,size=population))+geom_point()+facet_wrap(population~.)+
   theme_classic()+theme(legend.position = "none")+labs(y="Weight (g)",x="Temperature (°C)")+scale_y_continuous(breaks=c(0.005,0.01,0.015,0.02,0.025))+scale_x_continuous(breaks=c(16,20,24,26,28,30))+
   scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="population")+
   scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="population")+
   scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+theme(text=element_text(family="arial",size=22))
 
-ggplot(growth.alive,aes(y=wt,x=temp,group=population,color=population,linetype=population))+geom_smooth(method='lm',formula=y~poly(x,2),se=F,aes(color=population,size=population))+
+ggplot(growth,aes(y=wt,x=temp,group=population,color=population,linetype=population))+geom_smooth(method='lm',formula=y~poly(x,2),se=F,aes(color=population,size=population))+
   scale_y_continuous(breaks=c(0.005,0.01,0.015,0.02,0.025))+scale_x_continuous(breaks=c(16,20,24,26,28,30))+
   scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
   scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
@@ -844,13 +979,13 @@ mods.brkxq<-list(
 
 aictab(mods.brkxq)
 
-brkptxmq<-glm(brkptxq~max,brkpts,family="gaussian")
+brkptxmq<-glm(brkptxq~max+oce,brkpts,family="gaussian")
 summary(brkptxmq)
 
 ggplot(brkpts,aes(x=max,y=brkptxq),group=interaction(oce))+
   geom_point(size=3,aes(color=oce))+geom_smooth(color="black",method="lm",se=F)+theme_classic()+
   ylab("Thermal Optima")+
-  xlab("Latitude (degrees)")+
+  xlab("Maximum habitat Temperature (degrees)")+
   theme(text=element_text(family="arial",size=22))+
   scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
   scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))
@@ -863,14 +998,44 @@ Here, we see a similar trend of increasing weight with latitude as we saw in seg
 ```{r,echo=F,warning=F}
 brkptsq_wh<-filter(brkpts,pop!="Woods Hole")
 
+mods.brkxq_wh<-list(
+   "nullo"=glm(brkptxq~1,brkptsq_wh,family="gaussian"),
+  "lato"=glm(brkptxq~lat+oce,brkptsq_wh,family="gaussian"),
+  "meano"=glm(brkptxq~mean+oce,brkptsq_wh,family="gaussian"),
+  "s.meano"=glm(brkptxq~s.mean+oce,brkptsq_wh,family="gaussian"),
+  "q.meano"=glm(brkptxq~q.mean+oce,brkptsq_wh,family="gaussian"),
+  "t.meano"=glm(brkptxq~t.mean+oce,brkptsq_wh,family="gaussian"),
+  "seasonlengtho10"=glm(brkptxq~seasonlength10+oce,brkptsq_wh,family="gaussian"),
+  "seasonlengtho16"=glm(brkptxq~seasonlength16+oce,brkptsq_wh,family="gaussian"),
+  "maxo"=glm(brkptxq~max+oce,brkptsq_wh,family="gaussian"),
+  "lat"=glm(brkptxq~lat,brkptsq_wh,family="gaussian"),
+  "mean"=glm(brkptxq~mean,brkptsq_wh,family="gaussian"),
+  "s.mean"=glm(brkptxq~s.mean,brkptsq_wh,family="gaussian"),
+  "q.mean"=glm(brkptxq~q.mean,brkptsq_wh,family="gaussian"),
+  "t.mean"=glm(brkptxq~t.mean,brkptsq_wh,family="gaussian"),
+  "seasonlength10"=glm(brkptxq~seasonlength10,brkptsq_wh,family="gaussian"),
+  "seasonlength16"=glm(brkptxq~seasonlength16,brkptsq_wh,family="gaussian"),
+  "omax"=glm(brkptxq~max,brkptsq_wh,family="gaussian"),
+  "o*lat"=glm(brkptxq~lat*oce,brkptsq_wh,family="gaussian"),
+  "o*mean"=glm(brkptxq~mean*oce,brkptsq_wh,family="gaussian"),
+  "o*s.mean"=glm(brkptxq~s.mean*oce,brkptsq_wh,family="gaussian"),
+  "o*q.mean"=glm(brkptxq~q.mean*oce,brkptsq_wh,family="gaussian"),
+  "o*t.mean"=glm(brkptxq~t.mean*oce,brkptsq_wh,family="gaussian"),
+  "o*seasonlength10"=glm(brkptxq~seasonlength10*oce,brkptsq_wh,family="gaussian"),
+  "seasonlength16"=glm(brkptxq~seasonlength16*oce,brkptsq_wh,family="gaussian"),
+  "o*max"=glm(brkptxq~max*oce,brkptsq_wh,family="gaussian")
+  )
 
-brkptxqm_wh<-lm(brkptxq~lat+oce,brkptsq_wh)
+aictab(mods.brkxq_wh)
+
+
+brkptxqm_wh<-lm(brkptxq~seasonlength10,brkptsq_wh)
 summary(brkptxqm_wh)
 
-ggplot(brkptsq_wh,aes(x=lat,y=brkptx,color=oce),group=interaction(oce))+
-  geom_point(size=3)+geom_smooth(aes(group=oce),method="lm",se=F)+theme_classic()+
+ggplot(brkptsq_wh,aes(x=seasonlength10,y=brkptxq))+
+  geom_point(size=3,aes(color=oce))+geom_smooth(color="black",method="lm",se=F)+theme_classic()+
   ylab("Thermal Optima")+
-  xlab("latitude")+
+  xlab("Season length (10, days)")+
   theme(text=element_text(family="arial",size=22))+
   scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
   scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))
