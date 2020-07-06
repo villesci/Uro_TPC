@@ -1,0 +1,339 @@
+---
+title: "Urosalpinx growth rate (length)"
+author: "Andrew Villeneuve"
+date: "2/25/2020"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(rmarkdown)
+library(dplyr)
+library(ggplot2)
+library(forcats)
+library(PerformanceAnalytics)
+library(sjPlot)
+library(lubridate)
+library(HH)
+library(AICcmodavg)
+library(MuMIn)
+library(mcp)
+library(ggiraphExtra)
+library(extrafont)
+library(segmented)
+loadfonts(device = "win")
+
+growth<-read.csv(here::here("data/growth.csv"))
+
+summary(growth)
+
+
+which(growth$wt>0.09)
+growth[92,12]=0.0109
+growth[193,12]=.0151
+growth[232,12]=.023
+growth[268,12]=.0261
+
+##eliminate all snails that died/unknown 
+growth.alive<-growth[!(growth$alive=="n"),]
+growth.alive<-growth.alive[!(growth$alive=="m"),]
+growth.alive<-na.omit(growth.alive)
+
+growth.alive<-subset(growth.alive,code!=(6212))
+
+##this below not only eliminates snails who ran out of food
+###eliminate snails that ever ran out of food
+#growth.alive<-subset(growth.alive,code!=(6833)&code!=(6831)&code!=(6711)&code!=(6632)&code!=(6631)&code!=(6611)&code!=(6433)&code!=(6422)&code!=(6412)&code!=(6411)&code!=(6233)&code!=(6212)&code!=(6212)&code!=(6111)&code!=(5831)&code!=(5813)&code!=(5732)&code!=(5731)&code!=(5723)&code!=(5711)&code!=(5622)&code!=(5531)&code!=(5333)&code!=(5313)&code!=(5312)&code!=(5213)&code!=(5121)&code!=(5112)&code!=(4522)&code!=(4521)&code!=(4433)&code!=(4432)&code!=(4231)&code!=(3821)&code!=(3712)&code!=(3433)&code!=(3432)&code!=(3421)&code!=(3413)&code!=(2422)&code!=(2421))
+
+##temeperature data
+library(dplyr)
+library(lubridate)
+setwd('C:/Users/drewv/Documents/UMASS/SSTdata/rawAtlantic/atl')
+gbj<-read.csv('gbj.csv',header=T)
+gbj$rdate<-as.POSIXct(gbj$DateTimeStamp,tz="","%m/%d/%Y%H:%M")
+gbj$oce<-"a"
+wh<-read.csv('wh.csv',header=T)
+wh$rdate<-as.POSIXct(wh$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+wh$oce<-"a"
+oy<-read.csv('oy.csv',header=T)
+oy$rdate<-as.POSIXct(oy$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+oy$oce<-"a"
+bf<-read.csv('bf.csv',header=T)
+bf$rdate<-as.POSIXct(bf$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+bf$oce<-"a"
+fb<-read.csv('fb.csv',header=T)
+fb$rdate<-as.POSIXct(fb$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+fb$oce<-"a"
+gcsk<-read.csv('gcsk.csv',header=T)
+gcsk$rdate<-as.POSIXct(gcsk$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+gcsk$oce<-"a"
+setwd('C:/Users/drewv/Documents/UMASS/SSTdata/rawPacific/pac')
+nah1516<-read.csv('nahcotta_2015_2016.csv',header=T)#2015 through August, 2016 data after that
+nah1516$rdate<-as.POSIXct(nah1516$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+nah1516$oce<-"p"
+hmi2<-read.csv('hmi2.csv',header=T)
+hmi2$rdate<-as.POSIXct(hmi2$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")#Indian island 2015
+hmi2$oce<-"p"
+to3<-read.csv('to3.csv',header=TRUE)
+to3$rdate<-as.POSIXct(to3$DateTimeStamp,tz="","%m/%d/%Y%H:%M")##stitched 2014 and 2015 (post Nove. 21 data together)
+to3$oce<-"p"
+
+
+s.gbj<-filter(gbj,rdate>"2018-06-01 00:00:00" & rdate< "2018-09-30 00:00:00")
+s.wh<-filter(wh,rdate>"2018-06-01 00:00:00" & rdate< "2018-09-30 00:00:00")
+s.oy<-filter(oy,rdate>"2018-06-01 00:00:00" & rdate< "2018-09-30 00:00:00")
+s.bf<-filter(bf,rdate>"2018-06-01 00:00:00" & rdate< "2018-09-30 00:00:00")
+s.fb<-filter(fb,rdate>"2018-06-01 00:00:00" & rdate< "2018-09-30 00:00:00")
+s.to3<-filter(to3,rdate>"2018-06-01 00:00:00" & rdate< "2018-09-30 00:00:00")
+s.hmi2<-filter(hmi2,rdate>"2018-06-01 00:00:00" & rdate< "2018-09-30 00:00:00")
+s.nah1516<-filter(nah1516,rdate>"2018-06-01 00:00:00" & rdate< "2018-09-30 00:00:00")
+s.gcsk<-filter(gcsk,rdate>"2018-06-01 00:00:00" & rdate< "2018-09-30 00:00:00")
+
+##Quartiles
+q<-data.frame("site" = c("gbj","wh","oy","bf","fb","nah1516","hmi2","to3","gcsk"),"quantile"=NA,"decile"=NA, "max"=NA)
+q[1,2]<-quantile(s.gbj$WTMP,0.75,type=1)
+q[2,2]<-quantile(s.wh$WTMP,0.75,type=1)
+q[3,2]<-quantile(s.oy$WTMP,0.75,type=1)
+q[4,2]<-quantile(s.bf$WTMP,0.75,type=1)
+q[5,2]<-quantile(s.fb$WTMP,0.75,type=1)
+q[6,2]<-quantile(s.nah1516$WTMP,0.75,type=1)
+q[7,2]<-quantile(s.hmi2$WTMP,0.75,type=1)
+q[8,2]<-quantile(s.to3$WTMP,0.75,type=1)
+q[9,2]<-quantile(s.gcsk$WTMP,0.75,type=1)
+
+q[1,3]<-quantile(s.gbj$WTMP,0.9,type=1)
+q[2,3]<-quantile(s.wh$WTMP,0.9,type=1)
+q[3,3]<-quantile(s.oy$WTMP,0.9,type=1)
+q[4,3]<-quantile(s.bf$WTMP,0.9,type=1)
+q[5,3]<-quantile(s.fb$WTMP,0.9,type=1)
+q[6,3]<-quantile(s.nah1516$WTMP,0.9,type=1)
+q[7,3]<-quantile(s.hmi2$WTMP,0.9,type=1)
+q[8,3]<-quantile(s.to3$WTMP,0.9,type=1)
+q[9,3]<-quantile(s.gcsk$WTMP,0.9,type=1)
+
+q[1,4]<-s.gbj %>% group_by(WTMP) %>% summarise(Value = max(WTMP))
+q[2,4]<-s.wh %>% group_by(WTMP) %>% summarise(Value = max(WTMP))
+q[3,4]<-s.oy %>% group_by(WTMP) %>% summarise(Value = max(WTMP))
+q[4,4]<-s.bf %>% group_by(WTMP) %>% summarise(Value = max(WTMP))
+q[5,4]<-s.fb %>% group_by(WTMP) %>% summarise(Value = max(WTMP))
+q[6,4]<-s.nah1516 %>% group_by(WTMP) %>% summarise(Value = max(WTMP))
+q[7,4]<-s.hmi2 %>% group_by(WTMP) %>% summarise(Value = max(WTMP))
+q[8,4]<-s.to3 %>% group_by(WTMP) %>% summarise(Value = max(WTMP))
+q[9,4]<-s.gcsk %>% group_by(WTMP) %>% summarise(Value=max(WTMP))
+
+
+#MEAN SST
+pac2<-rbind(to3,hmi2,nah1516)
+atll<-rbind(gcsk,fb,bf,oy,wh,gbj)
+
+temp<-rbind(pac2,atll) #temperature data for all
+
+means<-data.frame(with(temp,tapply(WTMP,site,mean)))
+#summer means
+
+summer.temp<-filter(temp,rdate>"2018-06-01 00:00:00" & rdate< "2018-09-30 00:00:00")
+s.mean<-data.frame(with(summer.temp,tapply(WTMP,site,mean)))
+
+```
+# The Study
+
+For this part of the study, we measured growth rates of juvenile snails. We measured snails within two days of them hatching, and grew them in tea strainers separated by population for 24 days. Nine replicates per population were distributed in six temperatures, with three groups of three subreplicates in each temperature/population treatment. The end length was recorded, and we substracted the starting length from the beginning length to get the growth rate (over 24 days).
+
+# Metadata
+
+* code
+
+  * Unique code for each indiviudal snail, corresponding to population, temperature treatment. First digit = temperature (1=16,2=20,3=24,4=26, 5=28, 6=30), second digit =  site (1=Willapa, 2=Humboldt, 3=Great Bay, 4=Woods Hole, 5=Oyster, 6=Beaufort, 7=Folly Beach, 8=Skidaway), third digit = tupperware bin number (1-3), fourth digit = snail replicate (1-3)
+
+* pop
+
+  * Source population of each snail. See data table below for list of site abbreivations with site. 
+
+* temp
+
+  * Common garden temperature the snails were raised in for 24 days. Degrees C
+
+* hatch
+
+  * hatch date of each snail from it's egg case (m/dd/yyyy)
+
+* exp.date
+
+  * Date on which hatchling snails were placed in the common garden experiment. Not more then 2 days from the hatch date. (m/dd/yyyy)
+
+* grow.date
+
+  * End date where growth measurements were taken. 24 days after exp.date, therefore no more then 26 days post hatch (m/dd/yyyy)
+
+* alive
+
+  * Tracks if snails survived the experient. m marks missing, n marks no, y marks yes
+
+* rem.oysters
+
+  * Was there a surplus of food at the end of the experiment? n marks no, y marks yes
+
+* cal.length.start
+
+  * caliper length of hatchlings upon entering the experment. We took photos of snails before entering snails into the experiment, and then used ImageJ to extract snail sizes. Size in mm
+
+* cal.length.end
+
+  * caliper length of hatchling at the end of the experiemnt. We took caliper measurements of the snails, as well as verifying the measurements using a subset of photographs in ImageJ. Size in mm
+
+* wt
+
+  * End weight of snail. Note that no initial starting weight was recorded. Weight in g.
+
+* ran.out
+
+  * Did the snail ever run out of food during the consumption experiment? 1 for yes, 0 for no
+
+* bin
+
+  * Bin number, controls subreplication. The third digit of the code. 
+
+* oce
+
+  * Ocean (Atlantic or Pacific)
+
+
+## Broken Stick regression
+
+It's hard to compare TPC against one another. One method we've settled on is the use of broken stick regression to allow us to quantify the shape of the reaction as well as the thermael optima (x) and the maximal trait performance (y).
+
+There are two methods to go about this. First is to use the segmented package, a relatively straightforward way to create piecewise regressions.
+
+I will compare the methods with one population that has been "problematic" in regards with the segmented package. 
+
+# Segmented
+
+Here is a great resource for getting started with the segmented package: https://www.r-bloggers.com/r-for-ecologists-putting-together-a-piecewise-regression/
+
+```{r,include=T,warning=F}
+#focusing on growth from one population, Great Bay. Filter, and plot raw data
+gb<-filter(growth.alive,pop=="Great Bay")
+ggplot(gb,aes(x=temp,y=cal.length))+geom_point()
+#create our model of caliper length over temperature
+m.gb<-glm(cal.length~temp,gb,family="gaussian")
+```
+
+What's going on here? I am telling the segmented package to create a broken stick model.
+
+* m.gb - the linear model object 
+* seg.Z - equation with no response variable, indicating the continuous predictor over which the breakpoint is estimated to lie
+* psi - starting predictor value for the package to start looking for the breakpoints. Can be a vector in the case of multiple breakpoints. Choose a psi value close to your eyeballed breakpoint
+* n.boot - number of bootstrap iterations. I chose a high number here because of the possible bimodal breakpoint in this data.
+* n.psi - not shown, but default at 1. Sets the number of expected breakpoints, ie can be multiple. 
+```{r,include=T,warning=F}
+seg.gb<-segmented(m.gb,seg.Z = ~temp, psi=24,n.boot=5000)
+summary(seg.gb)
+
+```
+
+great, we have our segmented model and we can see that we have a signficant deviation from 0 for slopes. Note that this does not tell us if the presence of a breakpoint is signficant. Now, we should plot the segmented model.
+
+```{r,include=T,warning=F}
+xmin<-min(growth.alive$temp,na.rm=T)
+xmax<-max(growth.alive$temp,na.rm=T)
+predicted.gb<-data.frame(temp=seq(xmin,xmax,length.out=100))
+predicted.gb$cal.length<-predict(seg.gb,predicted.gb)
+predicted.gb$pop<-"gb"
+predicted.gb$oce<-"a"
+
+ggplot(predicted.gb,aes(x=temp,y=cal.length))+geom_line(aes(group=pop,x=temp,y=cal.length,color=pop,linetype=pop,size=pop))+
+  ylab("Shell Length (mm)")+xlab("Common Garden Temperature (°C)")+theme_classic()+
+  scale_x_continuous(breaks=c(16,20,24,26,28,30))+geom_point(data=gb,aes(x=temp,y=cal.length))+scale_y_continuous(breaks=c(0,1,2,3,4,5))
+
+#extract breakpoint points
+brkpts_seg<-data.frame(matrix(,nrow=1,ncol=6))
+colnames(brkpts_seg)<-c("pop","brkptx","brkpty","brkptx_se","se_lower","se_higher")
+brkpts_seg[1,1]<-"gb_segmented"
+brkpts_seg[1,2]<-seg.gb$psi[[2]]
+brkpts_seg[1,3]<-(seg.gb$psi[[2]]*coef(seg.gb)[[2]])+(coef(seg.gb)[[1]])
+brkpts_seg[1,4]<-seg.gb$psi[[3]]
+brkpts_seg[1,5]<-brkpts_seg[1,2]-brkpts_seg[1,4]
+brkpts_seg[1,6]<-brkpts_seg[1,2]+brkpts_seg[1,4]
+
+brkpts_seg
+
+```
+
+Depending on the result of the segmented model, we either see a breakpoint at the point I want around 27 or earlier at a 'false' breakpoint. I can rerun and get the desired result back. Two issues with this:
+1) It's not dependable enough. I want to set the limits of x.
+2) I can get either the standard error or the confidence interval from the breakpoint, but I want to get the variance in y so that I can add error bars to when I extract breakpoint x and y and plot by latitude. 
+
+# mcp package
+
+What are the benefits of the mcp package? It gives a clearer picture into how the machine iterates and finds the best breakpoints, and is great for datasets like this one where you might need to control where the package looks for a breakpoint. It is much slower than segmented, particularly with large datasets. See below links for tips how to speed up.  
+
+Two good resources for mcp (one of which is my query on stackoverflow)
+https://stackoverflow.com/questions/60419033/segmented-package-breakpoints-are-variable-and-finding-standard-errors-on-breakp
+https://lindeloev.github.io/mcp/
+
+The method for creating a segmented model in mcp is a little different than segmented. First, you have to define (create) the model. 
+  
+
+```{r,include=T,warning=F}
+
+#create global model
+model_mcp=list(cal.length~1+temp, #line with intercept
+               ~0+temp) #Joined slope
+
+#use mcp to create model fit for each population
+
+#GB
+fitgb=mcp::mcp(model_mcp,data=gb,iter=10000,cores=3)
+```
+
+Here, I've made my fit for the great bay data over 10000 iterations. Cores=3 is a recommended set up . Let's plot.
+
+```{r, include=T,warning=F}
+plot(fitgb, q_fit = T, q_predict = T)
+```
+
+The gray lines here are 25 random samples from the posterior, ie 25 random model fits from our iterations. Red lines are our fitted intervals, green are our prediction intervals. The blue lines show the frequency of breakpoint occurance over our iterations. What we can see here are two potential breakpoints over the common garden temperatures. This explains why sometimes segmented choses to make the breakpoint occur around 20C instead of 27.5C, which is the "ecologically correct" point we are looking for. The nice thing about mcp is that it allows the user much more control over where the package looks for the breakpoint over your predictor variable. 
+
+Here, we assign some priors by limiting the iterative breakpoint searching between 22C and 30C.
+
+```{r,include=T,warning=F}
+##bimodal. Let's target the "real" breakpoint by assigning priors
+fitgb2=mcp::mcp(model_mcp,data=gb,prior=list(cp_1="dunif(22,30)"),iter=10000,cores=3)
+plot(fitgb2, q_fit = T, q_predict = T)
+
+```
+
+Success! This cleans up the breakpoint analysis quite a bit. Now, let's extract values from this mcp method and compare to the segmented regression.
+
+```{r,include=T,warning=F}
+sgb<-summary(fitgb2)
+
+#breakpoint_x
+sgb[1,2]
+#intercept
+sgb[2,2]
+#segment_1 slope
+sgb[4,2]
+#segment_2 slope
+sgb[5,2]
+#breakpoint_y
+sgb[1,2]*sgb[4,2]+sgb[2,2]
+
+brkpts_seg[2,1]<-"gb_mcp"
+brkpts_seg[2,2]<-sgb[1,2]
+brkpts_seg[2,3]<-sgb[1,2]*sgb[4,2]+sgb[2,2]
+brkpts_seg[2,4]<-"NA"
+brkpts_seg[2,5]<-sgb[1,3]
+brkpts_seg[2,6]<-sgb[1,4]
+
+brkpts_seg
+```
+
+Looks pretty good between the two methods, with mcp giving larger SE range than segmented.
+
+So, what model to chose? segmented is very intuitive, and is much easier to predict values from and plot (as far as I can tell). I used segmented to extract my breakpoints and plot my fitted segmented models, but I used mcp to troubleshoot data as needed since there is much more control for the user. 
+
+Resource for choosing pieceise regression packages: https://lindeloev.github.io/mcp/articles/packages.html
