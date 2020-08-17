@@ -11,7 +11,7 @@ output:
 
 # The Study - read first
 
-For this part of the study, we measured growth rates of juvenile Urosalpinx snails. We measured snail length using ImageJ within two days of hatching, and grew them in tea strainers separated by population for 24 days in a common garden experiment. Nine replicates per population were distributed in six temperatures, with three groups of three subreplicates in each temperature/population treatment. Snails were given food ad libitum. The end length was recorded using digital calipers after 24 days, and we substracted the starting length from the beginning length to get the growth rate (over 24 days; see data exploration for reasoning). From this growth data, we can create thermal performance curves (TPCs) for each population to show the growth response of Urosaplinx populations to a range of laboratory temperatures.
+For this part of the study, we measured growth rates of juvenile Urosalpinx snails. We measured snail length using ImageJ within two days of hatching, and grew them in tea strainers separated by population for 24 days in a common garden experiment. Nine replicates per population were distributed in six temperatures, with three groups of three subreplicates in each temperature/population treatment. Snails were given food ad libitum. The end length was recorded using digital calipers after 24 days, and we subtracted the starting length from the beginning length to get the growth rate (over 24 days; see data exploration for reasoning). From this growth data, we can create thermal performance curves (TPCs) for each population to show the growth response of Urosaplinx populations to a range of laboratory temperatures.
 
 The analysis of these growth curves requires two steps: 
 
@@ -312,7 +312,7 @@ temp$site<-factor(temp$site, levels=c("gbj","wh","oy","bf","fb","GCSK","nah15","
 
 We had to clean parts of the data to prepare it for analysis. The first issue we had to resolve was the extreme weight and caliper length outliers, which was clearly due to a misplaced decimal or missing 0 during data entry (these data points were off by a factor of 10 from "correct" data). In the silenced part of the markdown, this had to be corrected 5/432 times. 
 
-The second issue was that some snails ran out of food during the growth experiment, which could jeopardize our assumption of unlimited growth while in the common garden experiment. We checked snail consumption three times over the course of the experiment, both to ensure snails had food but also to record which ones ran out of food. The vast majority (391/432) of snails never ran out of food. 40/432 ran out of food once, while 1/432 ran out of food twice. The plot below shows this breakdown, with snails that never ran out food removed. For the purposes of this experiment, we decided to include snails that missed a single meal during the entirity of the experiment, but removed the single case in which a snail ran out of food twice. 
+The second issue was that some snails ran out of food during the growth experiment, which could jeopardize our assumption of unlimited growth while in the common garden experiment. We checked snail consumption three times over the course of the experiment, both to ensure snails had food but also to record which ones ran out of food. The vast majority (391/432) of snails never ran out of food. 40/432 ran out of food once, while 1/432 ran out of food twice. The plot below shows this breakdown, with snails that never ran out food removed. For the purposes of this experiment, we decided to include snails that missed a single meal during the entirety of the experiment, but removed the single case in which a snail ran out of food twice. 
 
 Further, the second plot below shows that most snails consumed all their food at timepoint 1, followed by timepoint 2 and finally timepoint 3 (seven snails ran out at t3)
 
@@ -355,7 +355,7 @@ We extracted temperature data from each site. With this data, we calculated diff
 We also used latitude as a predictor (not shown in table below)
 ```{r,include=T,echo=F,warning=F}
 #plot of site temperatures
-ggplot(data=temp,aes(x=date,y=WTMP,color=site))+scale_color_viridis_d(name="Site",labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),option="D")+theme_classic()+geom_vline(xintercept = 152)+geom_vline(xintercept = 273)+ylab("SST (°C)")+xlab("")+scale_fill_discrete(name="Site",labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"))+scale_x_date(date_labels = "%b")+theme(text=element_text(family="sanserif",size=14))+stat_smooth(se=,size=2)+geom_point(alpha=0.0002,color="black",fill="white")+guides(color=guide_legend(override.aes=list(fill=NA)))
+ggplot(data=temp,aes(x=date,y=WTMP,color=site))+scale_color_viridis_d(name="Site",labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),option="D")+theme_classic()+geom_vline(xintercept = 152)+geom_vline(xintercept = 273)+ylab("SST (°C)")+xlab("")+scale_fill_discrete(name="Site",labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"))+scale_x_date(date_labels = "%b")+theme(text=element_text(family="sanserif",size=14))+stat_summary(geom="line",fun.y=mean,size=2)+geom_point(alpha=0.0002,color="black",fill="white")+guides(color=guide_legend(override.aes=list(fill=NA)))
   
 
 
@@ -369,7 +369,7 @@ q
 
 ## Do sites differ? 
 
-Do populations differ in their growth rate across the common garden experiemnt? Here, ANOVA tells us that growth betwween sites are signficantly different. We are justified in pursuing population and temperature level differences. 
+Do populations differ in their growth rate across the common garden experiemnt? Here, ANOVA tells us that growth betwween sites are significantly different. We are justified in pursuing population and temperature level differences. 
 ```{r,include=T,warning=F}
 
 anovasites<-(aov(cal.length~pop*temp,data=growth.alive))
@@ -652,6 +652,15 @@ ggplot(all.length.pred,aes(x=temp,y=cal.length))+geom_line(aes(group=pop,x=temp,
   scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="pop")+
   scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="pop")+
   scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="pop")+theme(text=element_text(family="arial",size=22))+geom_point(data=growth.alive,aes(x=temp,y=cal.length,group=pop))+facet_wrap(pop~.)+theme(legend.position = "none") 
+
+
+ggplot(all.length.pred,aes(x=temp,y=cal.length))+geom_line(aes(group=population,x=temp,y=cal.length,color=population,linetype=population,size=population))+
+  ylab("Shell Length (mm)")+xlab("Common Garden Temperature (°C)")+theme_classic()+
+  scale_x_continuous(breaks=c(16,20,24,26,28,30))+
+  scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("New Hampshire","Massachusetts","Virginia","North Carolina","South Carolina","Georgia","Washington (invasive)","California (invasive"),name="Population")+
+  scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("New Hampshire","Massachusetts","Virginia","North Carolina","South Carolina","Georgia","Washington (invasive)","California (invasive"),name="Population")+
+  scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("New Hampshire","Massachusetts","Virginia","North Carolina","South Carolina","Georgia","Washington (invasive)","California (invasive"),name="Population")+theme(text=element_text(family="arial",size=22))
+#+geom_boxplot(data=growth.alive,aes(x=temp,y=cal.length,group=interaction(temp,pop),fill=pop))
 ```
 
  Here, I show the segmented model fits both on a single plot and facetted to show spread of points. Just by eyeballing the results, we see that more or less the northern sites have optima above those of southern sites. We will test for this later. First, how confident are we in these breakpoints? The tests below tell us.
@@ -762,14 +771,14 @@ brkpts[7,5]<-means[4,1]
 brkpts[8,5]<-means[3,1]
 
 #s.mean
-brkpts[1,6]<-s.mean[2,1]
-brkpts[2,6]<-s.mean[1,1]
-brkpts[3,6]<-s.mean[8,1]
-brkpts[4,6]<-s.mean[7,1]
-brkpts[5,6]<-s.mean[6,1]
-brkpts[6,6]<-s.mean[5,1]
-brkpts[7,6]<-s.mean[4,1]
-brkpts[8,6]<-s.mean[3,1]
+brkpts[1,6]<-s.mean[6,1]
+brkpts[2,6]<-s.mean[5,1]
+brkpts[3,6]<-s.mean[3,1]
+brkpts[4,6]<-s.mean[8,1]
+brkpts[5,6]<-s.mean[7,1]
+brkpts[6,6]<-s.mean[1,1]
+brkpts[7,6]<-s.mean[2,1]
+brkpts[8,6]<-s.mean[4,1]
 #q.mean
 brkpts[1,7]<-q[6,2]
 brkpts[2,7]<-q[7,2]
@@ -923,7 +932,7 @@ summary(brkptym)
 ggplot(brkpts,aes(x=seasonlength16,y=brkpty))+
   geom_point(size=3,aes(color=oce))+theme_classic()+
   ylab("Maximal Growth (mm)")+
-  xlab("Season Length (days), 16C")+
+  xlab("Season Length (days), 16°C")+
   theme(text=element_text(family="arial",size=22))+
     scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
     scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
@@ -938,16 +947,16 @@ brkptym2<-(lm(brkpty~seasonlength10,brkpts))
 summary(brkptym2) 
 
 ggplot(brkpts,aes(x=seasonlength10,y=brkpty))+
-  geom_point(size=3,aes(color=oce))+theme_classic()+
+  geom_point(size=3,aes(color=oce,shape=oce))+theme_classic()+
   ylab("Maximal Growth (mm)")+
-  xlab("Season Length (days), 10C")+
+  xlab("Season Length (days), 10°C")+
   theme(text=element_text(family="arial",size=22))+
     scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
     scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
-  geom_smooth(method='lm',se=F,color="black")
+  geom_smooth(method='lm',se=F,color="black")+scale_shape_manual(labels=c("Atlantic","Pacific"),name="Ocean",values=c(16,17))
 ```
 
-When we look at season length when calcualted at 10C, we see a signficant relationship between maximal trait performance and season length. This trend disappears when we calcualte it at 16C, mostly because our Pacific sites "ungroup" from the Atlantic sites. At 10C season length, we could be seeing possible countergradient variation! The one weird point in the Atlantic is Woods Hole. Anecdotally, I could attribute this to the very hot local conditions in the estuary, but can't say for sure. 
+When we look at season length when calculated at 10C, we see a significant relationship between maximal trait performance and season length. This trend disappears when we calculate it at 16C, mostly because our Pacific sites "ungroup" from the Atlantic sites. At 10C season length, we could be seeing possible countergradient variation! The one weird point in the Atlantic is Woods Hole. Anecdotal, I could attribute this to the very hot local conditions in the estuary, but can't say for sure. 
 
 But what about the thermal optima?
 
@@ -1254,7 +1263,7 @@ ggplot(brkpts,aes(x=seasonlength10,y=brkptxq))+
 
 Here, we see that the maxima growth rate pattern is more or less preserved. While we don't trust the quadratic estimates for the optima, I do trust that there is a pattern of increasing growth rate with higher latitude. This is evidence for countergradient variation in growth. We can confirm this by looking further at growth in weight as well as in consumption rate. 
 
-Finally, let us compare the breakpoints we have extracted from segmented and quadratic regression. We want to know if we see signficantly different results in methods, because if we do then we have to be careful about which once we select (seg v. quad). We see here that while thermal optima estimates differ signficantly between quad and seg, they do not when estimating maximal trait performance. Importantly, the sign of both relationships is the same. Therefore, we can be confident that our conclusion of countergradient variation in maximal trait peroformance is correct. 
+Finally, let us compare the breakpoints we have extracted from segmented and quadratic regression. We want to know if we see significantly different results in methods, because if we do then we have to be careful about which once we select (seg v. quad). We see here that while thermal optima estimates differ significantly between quad and seg, they do not when estimating maximal trait performance. Importantly, the sign of both relationships is the same. Therefore, we can be confident that our conclusion of countergradient variation in maximal trait performance is correct. 
 
 ```{r,echo=F}
 brkptnewx<-gather(brkpts, modeltypex, x, c(brkptx,brkptyq)) 

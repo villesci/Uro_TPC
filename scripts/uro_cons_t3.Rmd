@@ -2,7 +2,8 @@
 title: "uro_cons_t3"
 author: "Andrew Villeneuve"
 date: "5/28/2020"
-output: html_document
+output: 
+   word_document: default
 ---
 ```{r setup,include=F}
 library(tidyr)
@@ -180,6 +181,20 @@ temp$site<-factor(temp$site, levels=c("gbj","wh","oy","bf","fb","GCSK","nah15","
 
 For this part of the study, we measured the consumption rate of juvenile Urosalpinx cinerea . We placed snails in tea strainers within two days of hatching, and grew them in tea strainers separated by population for 24 days. Nine replicates per population were distributed in six temperatures, with three groups of three subreplicates in each temperature/population treatment. Each snail was given five oysters at the beginning of the experiment, and over three different timepoints we checked strainers for number of oysters consumed and added new oysters. While the time between checking and adding oysters differed, time between checking for each snail was recorded. In some cases, all oysters were consumed, and in this case we noted this and removed the snails from analysis (see silenced code for this). Here, we will analyze only the rate of consumption at the third timepoint, as differences between populations at t1 and t2 were minimal. At time point 3, all snails had been in the experiment for 10-13 days and ranged from 12-15 days old. We stopped recording consumption rate after 10-13 days and simply added oysters to fuel their growth. 
 
+The analysis of these growth curves requires two steps: 
+
+1) the creation of models that describe the curved TPC shape using segmented and quadratic models and
+
+2) the extraction of breakpoints (thermal optima = x breakpoint, maximal trait performance = y optima) for each population's TPC and modeling which environmental factors best describe any patterns in these optima across populations. I do this across two methods - segmented and quadratic regression. We want to see if both methods give approximately the same results, and based on model outputs decide which method we should use.
+
+These two steps are presented, separately, in the Data Analysis section. The organization of these analyses thusly:
+
+* Broken stick regression - I create, analyze, and plot segmented regressions 
+  * Breakpoint analysis, broken stick - I extract the thermal optima (x brkpt) and maximal trait performance (y brkpt) of each population's segmented regression
+
+* Quadratic model - I create, analyze, and plot quadratic regressions. 
+  * Breakpoint analysis, quadratic - I extract the thermal optima (x brkpt) and maximal trait performance (y brkpt) of each population's quadratic regression
+
 ## Metadata
 
 ### TPC.Label 
@@ -232,19 +247,37 @@ Whether all oysters were consumed in the course of the timepoint duration, in ot
 
 ### Environmental Data
 
+We extracted temperature data from each site. With this data, we calculated different environmental predictors that might explain patterns in growth. 
+
+* "Quantile" (°C)  
+  *The average SST of the upper 75th percentile of summer months (06/01/2018 - 09/30/2018)
+* "Decile" (°C)
+  *The average SST of the upper 90th percentile of summer months (06/01/2018 - 09/30/2018)
+* "max" 
+  *The maximum SST value recorded during summer months (06/01/2018 - 09/30/2018)
+* "mean"  (°C)
+  *The mean SST of the site, calculated across the entire year
+* "summer mean" (°C)
+  *The mean SST of the site, calculated during the summer months (06/01/2018 - 09/30/2018)
+* "seasonlength10/16" (days)
+  *The number of days where the average daily temperature exceeded a threshold. Here, we use 16C, since this was our lowest temperature in experimentation and resulted in very slow growth (accelerates at 20C) - from Cheng et al. 2017. However, things become signicant when performed at 10C. We can also use 12.5C and get somewhat significant results, after the breakpoint for Oxygen consumption found in Schick's dissertation (Schick 1971) 
+
+We also used latitude as a predictor (not shown in table below)
+
+
 ```{r,include=T,echo=F,warning=F}
 #plot of site temperatures
-ggplot(data=temp,aes(x=date,y=WTMP,color=site))+scale_color_viridis_d(name="Site",labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),option="D")+theme_classic()+geom_vline(xintercept = 152)+geom_vline(xintercept = 273)+ylab("SST (°C)")+xlab("")+scale_fill_discrete(name="Site",labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"))+scale_x_date(date_labels = "%b")+theme(text=element_text(family="sanserif",size=14))+stat_smooth(se=,size=2)+geom_point(alpha=0.0002,color="black",fill="white")+guides(color=guide_legend(override.aes=list(fill=NA)))
+ggplot(data=temp,aes(x=date,y=WTMP,color=site))+scale_color_viridis_d(name="Site",labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),option="D")+theme_classic()+geom_vline(xintercept = 152)+geom_vline(xintercept = 273)+ylab("SST (°C)")+xlab("")+scale_fill_discrete(name="Site",labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"))+scale_x_date(date_labels = "%b")+theme(text=element_text(family="sanserif",size=14))+stat_summary(geom="line",fun.y=mean,size=2)+geom_point(alpha=0.0002,color="black",fill="white")+guides(color=guide_legend(override.aes=list(fill=NA)))
   
+
 q
 
 
 ```
 
 # Data Exploration
-
-Below, we can see why we focus on t3. A wider range of consumption rates. As a result, I will filter out timepoints 1 and 2 and keep t3 observations only. 
-```{r,echo=F}
+As explained in the introduction, we checked for consumption rate three times during the 24 day experiment. Each time we checked, was coded as t1, t2, or t3. Below, we can see why we focus on t3 for this anlaysis over the other two timepoints. A wider range of consumption rates. As a result, I will filter out timepoints 1 and 2 and keep t3 observations only. This is because site differences only begin to become obvious after some time, and any difference in consumption rates will therefore also only appear as snails continue to grow.
+```{r,echo=F,warning=F}
 ggplot(uro.con,aes(x=Temp,y=rate,color=Population))+geom_smooth(se=F)+geom_jitter(aes(fill=Population))+facet_wrap(timepoint~.)
 
 uro.con3<-filter(uro.con,timepoint=="3")
@@ -264,11 +297,11 @@ hist(uro.con3$rate)
 
 ## Residuals of a full model
 
-Below are analyses of several types of models that should model consumption rate over temperature and population. I used a poisson error distribution and a log transformed offset of duration to the number consumed to get the rate.  I used the log of no.consumption partially because this is what Cheng et al. 2017 did.
+Below are analyses of several types of models that should model consumption rate over temperature and population. THe whole point of this section is to test which model families and structures are best to use later on when we construct segmented regressions. I used a poisson error distribution and a log transformed offset of duration to the number consumed to get the rate.  I used the log of no.consumption partially because this is what Cheng et al. 2017 did.
 
 I check each of these models to test for overdispersion (and further zero inflation models below). I can fix overdispersion, but the behavior of the residuals seem to be difficult to solve. 
 
-```{r}
+```{r,waraning=F,echo=F}
 
 full<-glmmTMB(no.consumed ~ Population *Temp  + (1|tank.replicate), uro.con3, family = "poisson",offset=(log(duration)))
 
@@ -315,7 +348,7 @@ A couple of observations: one, the log of duration as an offset to no.consumed a
 
 Let's test for zero-inflation
 
-```{r}
+```{r,echo=F,warning=F}
 testZeroInflation(sim_full)
 #doesn't look zero inflated, but we need to directly compare
 
@@ -328,9 +361,14 @@ bbmle::AICctab(full,fullz,fullzOLRE,binomzOLRE,binomz,binomzOLRE2,binomz2,fullOL
 
 # Create Broken Stick Regressions
 
-All of those models are a mess. Really,I just need to have segmented create broken stick models. 
+All of those models are a mess. Really,I just need to have segmented create broken stick models. Here, based on the information above, I chose a nbinom2 family with a log offset for duration.
 
-```{r}
+
+It's hard to compare TPC against one another. One method we've settled on is the use of broken stick regression to allow us to quantify the shape of the reaction as well as the thermal optima (x) and the maximal trait performance (y). Here, we used the segmented package to create single-optima broken stick regressions that also allow us to extract optimas.
+
+We used a separate model for each population, as segmented does not allow for grouping. We used the following formulation: glm(number consumed ~ temperature, population,family=nbinom2, offset=log(duration)), such that we modeled the response of consumption rate (number consumed offset by days) from a single population to temperature. 
+
+```{r,warning=F,echo=F}
 bf<-filter(uro.con3,Population=="Beaufort")
 fb<-filter(uro.con3,Population=="Folly Beach")
 gb<-filter(uro.con3,Population=="Great Bay")
@@ -436,7 +474,8 @@ ggplot(all.cons.pred,aes(x=Temp,y=log_rate,group=Population))+geom_line(aes(grou
 ```
 
 
-#Breakpoints (incomplete)
+# Breakpoints extraction (silenced)
+
 ```{r,echo=F,warning=F}
 
  
@@ -543,11 +582,63 @@ brkpts_con[8,15]<-q[9,8]
 
 ```
 
+Here, we see that the stacking of regressions is not as clear as with shell length or weight (separate markdown). To see if countergradient variation in still present, we will have to extract breakpoints. First off, how confident are we in our breakpoints?
+
+*P-score: The P-score tests the null hypothesis for no difference in slopes, i.e. no breakpoint. If P is below 0.05, then there is a breakpoint. We see here that not all P-scores are signficant, and therefore we fail to reject the null hypothesis of no change in slope, ie there are no breakpoints
+ 
+*  CI Low/High: Confidence interval of the breakpoint
+ 
+* Breakpoint: Breakpoint (x axis, thermal optima)
+ 
+ 
+```{r,echo=F,warning=F}
+scorescons<-data.frame("site" = c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),"P Score"=NA,"Davies Test"=NA,"CI Low"=NA,"CI High"=NA,"breakpoint"=NA)
+scorescons[1,2]<-pscore.test(seg.gb,~Temp)[[5]]
+scorescons[2,2]<-pscore.test(seg.wh,~Temp)[[5]]
+scorescons[3,2]<-pscore.test(seg.oy,~Temp)[[5]]
+scorescons[4,2]<-pscore.test(seg.bf,~Temp)[[5]]
+scorescons[5,2]<-pscore.test(seg.fb,~Temp)[[5]]
+scorescons[6,2]<-pscore.test(seg.sk,~Temp)[[5]]
+scorescons[7,2]<-pscore.test(seg.wp,~Temp)[[5]]
+scorescons[8,2]<-pscore.test(seg.hm,~Temp)[[5]]
+
+
+scorescons[1,4]<-confint(seg.gb)[[2]]
+scorescons[2,4]<-confint(seg.wh)[[2]]
+scorescons[3,4]<-confint(seg.oy)[[2]]
+scorescons[4,4]<-confint(seg.bf)[[2]]
+scorescons[5,4]<-confint(seg.fb)[[2]]
+scorescons[6,4]<-confint(seg.sk)[[2]]
+scorescons[7,4]<-confint(seg.wp)[[2]]
+scorescons[8,4]<-confint(seg.hm)[[2]]
+
+scorescons[1,5]<-confint(seg.gb)[[3]]
+scorescons[2,5]<-confint(seg.wh)[[3]]
+scorescons[3,5]<-confint(seg.oy)[[3]]
+scorescons[4,5]<-confint(seg.bf)[[3]]
+scorescons[5,5]<-confint(seg.fb)[[3]]
+scorescons[6,5]<-confint(seg.sk)[[3]]
+scorescons[7,5]<-confint(seg.wp)[[3]]
+scorescons[8,5]<-confint(seg.hm)[[3]]
+
+scorescons[1,6]<-confint(seg.gb)[[1]]
+scorescons[2,6]<-confint(seg.wh)[[1]]
+scorescons[3,6]<-confint(seg.oy)[[1]]
+scorescons[4,6]<-confint(seg.bf)[[1]]
+scorescons[5,6]<-confint(seg.fb)[[1]]
+scorescons[6,6]<-confint(seg.sk)[[1]]
+scorescons[7,6]<-confint(seg.wp)[[1]]
+scorescons[8,6]<-confint(seg.hm)[[1]]
+
+
+scorescons
+```
+
 # Breakpoint analysis
 
-## Breakpoint, y 
+## Breakpoint, y - Maximal trait performance
 
-```{r}
+```{r,echo=F,warning=F}
    ###################################3
    #y point (trait performance)
   #brkpts_con<-filter(brkpts_con,pop!="Skidaway")
@@ -582,13 +673,20 @@ brkpts_con[8,15]<-q[9,8]
    
    
 aictab(mods.brk_con)
-   summary(glm(brkpty~mean,brkpts_con,family="gaussian"))
+   summary(lm(brkpty~mean,brkpts_con))
    
-   ggplot(brkpts_con,aes(x=mean,y=brkpty,color=oce,fill=oce),group=oce)+
-      geom_point(size=3)+theme_classic()+geom_smooth(method="lm",se=F)+ylab(label="Rate of Consumption") 
+   ggplot(brkpts_con,aes(x=mean,y=brkpty))+
+      geom_point(aes(color=oce),size=3)+theme_classic()+geom_smooth(method="lm",se=F,color="black")+ylab(label="Consumption Rate \n log(oysters/day)")+scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
+    scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+theme(text=element_text(family="arial",size=22))+xlab("Mean Temperature (°C)") 
    
 ```
-```{r}
+
+Here, we see that mean temperature is the best predictor according to AIC. Populations from warmer sites tend to have lower consumption rates, although this was not signficant (P>0.05). This is not evidence for countergradient variation in consumption rates. 
+
+## Breakpoint, x - thermal optima
+
+
+```{r,echo=F,warning=F}
      ###############################################3
    #x point (t opt)
    mods.brk_con<-list(
@@ -620,11 +718,24 @@ aictab(mods.brk_con)
   )
    
    aictab(mods.brk_con)
-   summary(glm(brkptx~mean,brkpts_con,family="gaussian"))
+   summary(lm(brkptx~mean,brkpts_con))
    
-   ggplot(brkpts_con,aes(x=s.mean,y=brkptx,color=oce,fill=oce),group=oce)+
-      geom_point(size=3)+theme_classic()+geom_smooth(method="lm",se=F)+ylab(label="Topt") 
+   ggplot(brkpts_con,aes(x=mean,y=brkptx))+
+      geom_point(aes(color=oce),size=3)+theme_classic()+geom_smooth(method="lm",se=F,color="black")+ylab(label="Thermal Optima (°C)")+
+      scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
+      scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean",
+      values=c('red','blue'))+theme(text=element_text(family="arial",size=22))+
+      xlab('Mean Temperature (°C)')
+```
 
+Here, we see mean site temperature again as the best predictor, and that the pattern of decreasing thermal optima with mean site temperature is preserved so that warmer sites perform best at lower temperatures. However, this pattern was not signficant (P>0.05)
+
+
+## Quadratic
+
+One reason we are checking quadratic is that sometimes the optima isn't the optima! If you closely examine the segmented regressions, you see that in some cases the second segment's slope does not appear to be negative. Instead, it plateaus. This raises the question whether we can really define our breakpoint as optima. Potentially, we could interpret the breakpoints as the lowest temperature of maximum weight At any rate, one idea is to redo all the analysis we just did for segmented regression but with a quadratic model, and seeing if we get a similar result in both the stacking but also the trends of the maximal weight and optima as we did with the segmented regression. 
+
+```{r,echo=F,warning=F}
    
    #####################################################################################
    #################################################################################
@@ -715,7 +826,11 @@ aictab(mods.brk_con)
       scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
       scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
       theme_classic()+labs(y="Rate of Consumption",x="Temperature (?C)")+facet_wrap(Population~.)+geom_point()+theme(legend.position = "none")+scale_y_continuous(breaks=c(0,1,2,3),limits=c(0,3))
-   
+```
+
+## Y Breakpoint, maximal trait performance, quadratic
+
+```{r,echo=F,warning=F}
    
    mods.brkyq<-list(
     "nullo"=glm(brkptyq~1,brkpts_con,family="gaussian"),
@@ -750,16 +865,24 @@ aictab(mods.brk_con)
    brkptxmq<-glm(brkptyq~mean,brkpts_con,family="gaussian")
    summary(brkptxmq)
    
-   ggplot(brkpts_con,aes(x=mean,y=brkptyq,color=oce),group=interaction(oce))+
-      geom_point(size=3)+geom_smooth(aes(group=oce),method="lm",se=F)+theme_classic()+
-      ylab("Maximal Growth (g)")+
-      xlab("Latitude (degrees)")+
-      theme(text=element_text(family="arial",size=22))+
-      scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('#F8766D','#00BFC4'))+
-      scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('#F8766D','#00BFC4'))
+   ggplot(brkpts_con,aes(x=mean,y=brkptyq))+
+      geom_point(aes(color=oce),size=3)+geom_smooth(method="lm",se=F,color="black")+
+      theme_classic()+ylab("Maximal Growth (g)")+
+      scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
+      scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean",
+      values=c('red','blue'))+theme(text=element_text(family="arial",size=22))+
+      xlab('Mean Temperature (°C)')
+   
+```
+
+Using quadratic, there is no significant relationship between environment (mean temp) and maximal trait performance. While this doesn't confirm that quadratic is a worse pick over segmented, our segmented results have lower p values and confirms what we've seen with growth and length, that segmented works best. 
+
+## X breakpoint, thermal optima, quadratic
+
+```{r,echo=F,warning=F}
    
    mods.brkxq<-list(
-       "nullo"=glm(brkptxq~1,brkpts_con,family="gaussian"),
+   "nullo"=glm(brkptxq~1,brkpts_con,family="gaussian"),
   "lato"=glm(brkptxq~lat+oce,brkpts_con,family="gaussian"),
   "meano"=glm(brkptxq~mean+oce,brkpts_con,family="gaussian"),
   "s.meano"=glm(brkptxq~s.mean+oce,brkpts_con,family="gaussian"),
@@ -788,14 +911,36 @@ aictab(mods.brk_con)
    
    aictab(mods.brkxq)
    
-   brkptxmq<-glm(brkptxq~max,brkpts_con,family="gaussian")
+   brkptxmq<-glm(brkptxq~seasonlength10,brkpts_con,family="gaussian")
    summary(brkptxmq)
    
-   ggplot(brkpts_con,aes(x=max,y=brkptxq))+
+   ggplot(brkpts_con,aes(x=seasonlength10,y=brkptxq))+
       geom_point(size=3,aes(color=oce))+geom_smooth(method="lm",se=F,color="black")+theme_classic()+
       ylab("Thermal Optima")+
-      xlab("Latitude (degrees)")+
+      xlab("Season Length above 10C")+
       theme(text=element_text(family="arial",size=22))+
-      scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('#F8766D','#00BFC4'))+
-      scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('#F8766D','#00BFC4'))
+      scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
+      scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))
+```
+
+Finally, let us compare the breakpoints we have extracted from segmented and quadratic regression. We want to know if we see significantly different results in methods, because if we do then we have to be careful about which once we select (seg v. quad). We see here that while thermal optima estimates differ significantly between quad and seg, they do not when estimating maximal trait performance. Importantly, the sign of both relationships is the same. Therefore, we can be confident that our conclusion of countergradient variation in maximal trait performance is correct.
+```{r,echo=F,warning=F}
+brkptnewx<-gather(brkpts_con, modeltypex, x, c(brkptx,brkptxq)) 
+brkptnewy<-gather(brkpts_con,modeltypey,y,c(brkpty,brkptyq))
+
+ggplot(brkptnewx,aes(x=seasonlength10,y=x,group=modeltypex,color=modeltypex))+geom_point()+theme_classic()+scale_color_manual(labels=c("Segmented","Quadratic"),name="Thermal Optima",values=c("red","blue"))+geom_smooth(method=lm,se=F)
+
+ggplot(brkptnewy,aes(x=seasonlength10,y=y,group=modeltypey,color=modeltypey))+geom_point()+theme_classic()+scale_color_manual(labels=c("Segmented","Quadratic"),name="Maximal Trait Performance",values=c("red","blue"))+geom_smooth(method=lm,se=F)
+
+brkptnewx$pop<-as.character(brkptnewx$pop)
+summary(lm(x~modeltypex,brkptnewx))
+
+brkptnewy$pop<-as.character(brkptnewy$pop)
+summary(lm(y~modeltypey,brkptnewy))
+```
+
+
+```{r,include=F}
+
+#write.csv(brkpts_con,"C:/Users/drewv/Documents/UMASS/data/cons_brkpts.csv",row.names=F)
 ```

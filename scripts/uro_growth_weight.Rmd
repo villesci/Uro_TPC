@@ -110,6 +110,7 @@ library(ggiraphExtra)
 library(extrafont)
 library(here)
 library(lubridate)
+library(tidyr)
 loadfonts(device = "win")
 
 
@@ -544,7 +545,7 @@ ggplot(all.pred,aes(x=temp,y=wt,group=population))+geom_line(aes(x=temp,y=wt,col
 
 ```
 
-Here, we see that the stacking of regressions is not as clear as with length. To see if countergradient variation in still present, we will have to extract breakpoints. First off, how confident are we in our breakpoints?
+Here, we see that the stacking of regressions is not as clear as with shell length (separate markdown). To see if countergradient variation in still present, we will have to extract breakpoints. First off, how confident are we in our breakpoints?
 
 *P-score: The P-score tests the null hypothesis for no difference in slopes, i.e. no breakpoint. If P is below 0.05, then there is a breakpoint. We see here that not all P-scores are signficant, and therefore we fail to reject the null hypothesis of no change in slope, ie there are no breakpoints
  
@@ -611,7 +612,7 @@ Through these tests, my trust in the accuracy of the breakpoints on the x axis i
 ## Breakpoints analysis 
 
 
-To be able to complete statistical analysis of the differences in TPC curves, I extracted the x and y componenets of each curve to give me the thermal optima and maximal trait performance, respectively. This extraction is silenced in code. Once we have extracted the thermal optima and maximal trait performance, we can move on to the relationship between environment and each breakpoint componenet. 
+To be able to complete statistical analysis of the differences in TPC curves, I extracted the x and y componenets of each curve to give me the thermal optima and maximal trait performance, respectively. This extraction is silenced in code. Once we have extracted the thermal optima and maximal trait performance, we can move on to the relationship between environment and each breakpoint component. 
 
 ```{r,include=F}
 brkpts<-data.frame(matrix(,nrow=8,ncol=15))
@@ -713,7 +714,7 @@ brkpts$oce<-ifelse(brkpts$pop=="Beaufort","a",ifelse(brkpts$pop=="Folly Beach","
 
 
 ```
-### Breakpoint Y 
+### Breakpoint Y, maximal trait performance 
 
 ```{r,echo=F,warning=F}
 mods.brk<-list(
@@ -766,7 +767,7 @@ ggplot(brkpts,aes(x=seasonlength10,y=brkpty))+
 
 Once again the null model wins out, but when we go with the next best supported model (seasonlength10) we get a well supported, signficant relationship of increasing growth with increasing season length 
 
-### Breakpoint X
+### Breakpoint X, thermal optima
 
 ```{r,echo=F,warning=F}
 mods.brkx<-list(
@@ -899,7 +900,7 @@ ggplot(growth,aes(y=wt,x=temp,group=population,color=population,linetype=populat
 
 Here, we see that our regressions are more or less stacked with cold populations on top. This is indicative of countergradient variation. 
 
-## X  Breakpoint, Quadratic
+## X  Breakpoint, thermal optima, Quadratic
 
 ```{r,echo=F,warning=F}
 mods.brkyq<-list(
@@ -946,7 +947,7 @@ ggplot(brkpts,aes(x=seasonlength10,y=brkptyq))+
 
 This is clearly not a signficant reaction. The thermal optimas given by quadratics are absurdly high. We should put more trust (but not a lot more) in those produced by segmented regression.
 
-### Y Breakpoints, Quadratic
+### Y Breakpoints, maximal trait performance, Quadratic
 
 ```{r,echo=F,warning=F}
 mods.brkxq<-list(
@@ -1041,6 +1042,24 @@ ggplot(brkptsq_wh,aes(x=seasonlength10,y=brkptxq))+
   scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))
 
 ```
+Here, we see that the maxima growth rate pattern is more or less preserved. While we don't trust the quadratic estimates for the optima, I do trust that there is a pattern of increasing growth rate with higher latitude. This is evidence for countergradient variation in growth. We can confirm this by looking further at growth in weight as well as in consumption rate. 
+
+Finally, let us compare the breakpoints we have extracted from segmented and quadratic regression. We want to know if we see significantly different results in methods, because if we do then we have to be careful about which once we select (seg v. quad). We see here that while thermal optima estimates differ significantly between quad and seg, they do not when estimating maximal trait performance. Importantly, the sign of both relationships is the same. Therefore, we can be confident that our conclusion of countergradient variation in maximal trait performance is correct.
+```{r,echo=F}
+brkptnewx<-gather(brkpts, modeltypex, x, c(brkptx,brkptxq)) 
+brkptnewy<-gather(brkpts,modeltypey,y,c(brkpty,brkptyq))
+
+ggplot(brkptnewx,aes(x=seasonlength10,y=x,group=modeltypex,color=modeltypex))+geom_point()+theme_classic()+scale_color_manual(labels=c("Segmented","Quadratic"),name="Thermal Optima",values=c("red","blue"))+geom_smooth(method=lm,se=F)
+
+ggplot(brkptnewy,aes(x=seasonlength10,y=y,group=modeltypey,color=modeltypey))+geom_point()+theme_classic()+scale_color_manual(labels=c("Segmented","Quadratic"),name="Maximal Trait Performance",values=c("red","blue"))+geom_smooth(method=lm,se=F)
+
+brkptnewx$pop<-as.character(brkptnewx$pop)
+summary(lm(x~modeltypex,brkptnewx))
+
+brkptnewy$pop<-as.character(brkptnewy$pop)
+summary(lm(y~modeltypey,brkptnewy))
+```
+
 
 
 ```{r,include=F}
