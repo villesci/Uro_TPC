@@ -378,8 +378,9 @@ sk<-filter(uro.con3,Population=="Skidaway")
 wp<-filter(uro.con3,Population=="Willapa")
 wh<-filter(uro.con3,Population=="Woods Hole")
 
-m.wh<-glm(no.consumed~Temp,wh,family=nbinom2,offset=log(duration))
-seg.wh<-segmented(m.wh,seg.Z = ~Temp, psi=24)
+
+m.wh<-glm(no.consumed~Temp,wh,family='nbinom2',offset=log(duration))
+seg.wh<-segmented(m.wh,seg.Z = ~Temp, psi=29)
 
 m.gb<-glm(no.consumed~Temp,gb,family=nbinom2,offset=log(duration))
 seg.gb<-segmented(m.gb,seg.Z = ~Temp, psi=24)
@@ -461,15 +462,25 @@ uro.con$Population<-factor(uro.con$Population,levels=c("Great Bay","Woods Hole",
 
 
 ggplot(all.cons.pred,aes(x=Temp,y=log_rate,group=pop))+geom_line(aes(group=pop,color=pop,linetype=pop),size=1.5)+
-  ylab("Log Consumption log_rate (oysters/day)")+xlab("Common Garden Temperature")+theme_classic()+
-  scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
-  scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+scale_x_continuous(breaks=c(16,20,24,26,28,30))
+  ylab("Consumption rate (log(oysters/day))")+xlab("Common Garden Temperature")+theme_classic()+
+  scale_linetype_manual(values=c(1,1,1,1,1,1,4,4),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
+  scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+scale_x_continuous(breaks=c(16,20,24,26,28,30))+theme(text=element_text(family="arial",size=22))
 
-ggplot(all.cons.pred,aes(x=Temp,y=log_rate,group=Population))+geom_line(aes(group=Population,color=Population,linetype=Population),size=1.5)+
-   ylab("Log Consumption log_rate (oysters/day)")+xlab("Common Garden Temperature")+theme_classic()+
-   scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
-   scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+scale_x_continuous(breaks=c(16,20,24,26,28,30))+
-   geom_point(data=uro.con,aes(x=Temp,y=lograte,group=Population))+facet_wrap(Population~.)+theme(legend.position = "none") 
+uro.con$rate<-log(uro.con$rate)
+
+ggplot(all.cons.pred,aes(x=Temp,y=log_rate,group=pop))+geom_line(aes(group=pop,color=pop,linetype=pop),size=1.5)+
+   ylab("Consumption rate (log(oysters/day))")+xlab("Common Garden Temperature")+theme_classic()+
+   scale_linetype_manual(values=c(1,1,1,1,1,1,4,4),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
+   scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+scale_x_continuous(breaks=c(16,20,24,26,28,30))+
+   geom_point(data=uro.con,aes(x=Temp,y=rate,group=Population))+facet_wrap(Population~.)+theme(legend.position = "none") +theme(text=element_text(family="arial",size=22))
+
+
+#for figure
+consTPC<-ggplot(all.cons.pred,aes(x=Temp,y=log_rate,group=pop))+geom_line(aes(group=pop,color=pop,linetype=pop),size=1.5)+
+  ylab("Consumption rate (log(oysters/day))")+xlab("Common Garden Temperature")+theme_classic()+
+  scale_linetype_manual(values=c(1,1,1,1,1,1,4,4),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
+  scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+scale_x_continuous(breaks=c(16,20,24,26,28,30))+theme(text=element_text(family="arial",size=22))
+
 
 ```
 
@@ -508,24 +519,24 @@ ggplot(all.cons.pred,aes(x=Temp,y=log_rate,group=Population))+geom_line(aes(grou
                                                                                                                                                 37.288562,ifelse(brkpts_con$pop=="Tomales",38.12805,ifelse(brkpts_con$pop=="Woods Hole",41.57687,ifelse(brkpts_con$pop=="Willapa",46.5007,ifelse(brkpts_con$pop=="Skidaway",31.970
                                                                                                                                                                                                                                                                                         ,NA)))))))))
    #means
-   brkpts_con[1,5]<-means[2,1]
-   brkpts_con[2,5]<-means[1,1]
-   brkpts_con[3,5]<-means[8,1]
-   brkpts_con[4,5]<-means[7,1]
-   brkpts_con[5,5]<-means[6,1]
-   brkpts_con[6,5]<-means[5,1]
-   brkpts_con[7,5]<-means[4,1]
-   brkpts_con[8,5]<-means[3,1]
+   brkpts_con[1,5]<-means[6,1]#wp
+   brkpts_con[2,5]<-means[5,1]#hm
+   brkpts_con[3,5]<-means[3,1]#gb
+   brkpts_con[4,5]<-means[8,1]#wh
+   brkpts_con[5,5]<-means[7,1]#oy
+   brkpts_con[6,5]<-means[1,1]#bf
+   brkpts_con[7,5]<-means[2,1]#fb
+   brkpts_con[8,5]<-means[4,1]#sk
    
    #s.mean
-   brkpts_con[1,6]<-s.mean[2,1]
-   brkpts_con[2,6]<-s.mean[1,1]
-   brkpts_con[3,6]<-s.mean[8,1]
-   brkpts_con[4,6]<-s.mean[7,1]
-   brkpts_con[5,6]<-s.mean[6,1]
-   brkpts_con[6,6]<-s.mean[5,1]
-   brkpts_con[7,6]<-s.mean[4,1]
-   brkpts_con[8,6]<-s.mean[3,1]
+   brkpts_con[1,6]<-s.mean[6,1]
+   brkpts_con[2,6]<-s.mean[5,1]
+   brkpts_con[3,6]<-s.mean[3,1]
+   brkpts_con[4,6]<-s.mean[8,1]
+   brkpts_con[5,6]<-s.mean[7,1]
+   brkpts_con[6,6]<-s.mean[1,1]
+   brkpts_con[7,6]<-s.mean[2,1]
+   brkpts_con[8,6]<-s.mean[4,1]
    #q.means.
    brkpts_con[1,7]<-q[6,2]
    brkpts_con[2,7]<-q[7,2]
@@ -592,46 +603,75 @@ Here, we see that the stacking of regressions is not as clear as with shell leng
  
  
 ```{r,echo=F,warning=F}
-scorescons<-data.frame("site" = c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),"P Score"=NA,"Davies Test"=NA,"CI Low"=NA,"CI High"=NA,"breakpoint"=NA)
-scorescons[1,2]<-pscore.test(seg.gb,~Temp)[[5]]
-scorescons[2,2]<-pscore.test(seg.wh,~Temp)[[5]]
-scorescons[3,2]<-pscore.test(seg.oy,~Temp)[[5]]
-scorescons[4,2]<-pscore.test(seg.bf,~Temp)[[5]]
-scorescons[5,2]<-pscore.test(seg.fb,~Temp)[[5]]
-scorescons[6,2]<-pscore.test(seg.sk,~Temp)[[5]]
-scorescons[7,2]<-pscore.test(seg.wp,~Temp)[[5]]
-scorescons[8,2]<-pscore.test(seg.hm,~Temp)[[5]]
-
-
-scorescons[1,4]<-confint(seg.gb)[[2]]
-scorescons[2,4]<-confint(seg.wh)[[2]]
-scorescons[3,4]<-confint(seg.oy)[[2]]
-scorescons[4,4]<-confint(seg.bf)[[2]]
-scorescons[5,4]<-confint(seg.fb)[[2]]
-scorescons[6,4]<-confint(seg.sk)[[2]]
-scorescons[7,4]<-confint(seg.wp)[[2]]
-scorescons[8,4]<-confint(seg.hm)[[2]]
-
-scorescons[1,5]<-confint(seg.gb)[[3]]
-scorescons[2,5]<-confint(seg.wh)[[3]]
-scorescons[3,5]<-confint(seg.oy)[[3]]
-scorescons[4,5]<-confint(seg.bf)[[3]]
-scorescons[5,5]<-confint(seg.fb)[[3]]
-scorescons[6,5]<-confint(seg.sk)[[3]]
-scorescons[7,5]<-confint(seg.wp)[[3]]
-scorescons[8,5]<-confint(seg.hm)[[3]]
-
-scorescons[1,6]<-confint(seg.gb)[[1]]
-scorescons[2,6]<-confint(seg.wh)[[1]]
-scorescons[3,6]<-confint(seg.oy)[[1]]
-scorescons[4,6]<-confint(seg.bf)[[1]]
-scorescons[5,6]<-confint(seg.fb)[[1]]
-scorescons[6,6]<-confint(seg.sk)[[1]]
-scorescons[7,6]<-confint(seg.wp)[[1]]
-scorescons[8,6]<-confint(seg.hm)[[1]]
+scorescons<-data.frame("site" = c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),"breakpoint"=NA,"P Score"=NA,"Davies Test"=NA,"slope1"=NA,"CI slope 1"=NA,"slope2"=NA,"CI slope 2"=NA)
+#brkpts x
+scorescons[1,2]<-confint(seg.gb)[[1]]
+scorescons[2,2]<-confint(seg.wh)[[1]]
+scorescons[3,2]<-confint(seg.oy)[[1]]
+scorescons[4,2]<-confint(seg.bf)[[1]]
+scorescons[5,2]<-confint(seg.fb)[[1]]
+scorescons[6,2]<-confint(seg.sk)[[1]]
+scorescons[7,2]<-confint(seg.wp)[[1]]
+scorescons[8,2]<-confint(seg.hm)[[1]]
+#pscore
+#scorescons[1,3]<-pscore.test(seg.gb,~temp)[[5]]
+#scorescons[2,3]<-pscore.test(seg.wh,~temp)[[5]]
+#scorescons[3,3]<-pscore.test(seg.oy,~temp)[[5]]
+#scorescons[4,3]<-pscore.test(seg.bf,~temp)[[5]]
+#scorescons[5,3]<-pscore.test(seg.fb,~temp)[[5]]
+#scorescons[6,3]<-pscore.test(seg.sk,~temp)[[5]]
+#scorescons[7,3]<-pscore.test(seg.wp,~temp)[[5]]
+#scorescons[8,3]<-pscore.test(seg.hm,~temp)[[5]]
+#davies
+#scorescons[1,4]<-davies.test(seg.gb,~temp)[[5]]
+#scorescons[2,4]<-davies.test(seg.wh,~temp)[[5]]
+#scorescons[3,4]<-davies.test(seg.oy,~temp)[[5]]
+#scorescons[4,4]<-davies.test(seg.bf,~temp)[[5]]
+#scorescons[5,4]<-davies.test(seg.fb,~temp)[[5]]
+#scorescons[6,4]<-davies.test(seg.sk,~temp)[[5]]
+#scorescons[7,4]<-davies.test(seg.wp,~temp)[[5]]
+#scorescons[8,4]<-davies.test(seg.hm,~temp)[[5]]
+#slope1
+scorescons[1,5]<-as.data.frame(slope(seg.gb))[1,1]
+scorescons[2,5]<-as.data.frame(slope(seg.wh))[1,1]
+scorescons[3,5]<-as.data.frame(slope(seg.oy))[1,1]
+scorescons[4,5]<-as.data.frame(slope(seg.bf))[1,1]
+scorescons[5,5]<-as.data.frame(slope(seg.fb))[1,1]
+scorescons[6,5]<-as.data.frame(slope(seg.sk))[1,1]
+scorescons[7,5]<-as.data.frame(slope(seg.wp))[1,1]
+scorescons[8,5]<-as.data.frame(slope(seg.hm))[1,1]  
+#slope1Ci  
+scorescons[1,6]<-as.data.frame(slope(seg.gb))[1,1]-as.data.frame(slope(seg.gb))[1,4]
+scorescons[2,6]<-as.data.frame(slope(seg.wh))[1,1]-as.data.frame(slope(seg.wh))[1,4]
+scorescons[3,6]<-as.data.frame(slope(seg.oy))[1,1]-as.data.frame(slope(seg.oy))[1,4]
+scorescons[4,6]<-as.data.frame(slope(seg.bf))[1,1]-as.data.frame(slope(seg.bf))[1,4]
+scorescons[5,6]<-as.data.frame(slope(seg.fb))[1,1]-as.data.frame(slope(seg.fb))[1,4]
+scorescons[6,6]<-as.data.frame(slope(seg.sk))[1,1]-as.data.frame(slope(seg.sk))[1,4]
+scorescons[7,6]<-as.data.frame(slope(seg.wp))[1,1]-as.data.frame(slope(seg.wp))[1,4]
+scorescons[8,6]<-as.data.frame(slope(seg.hm))[1,1]-as.data.frame(slope(seg.hm))[1,4]
+#slope2
+scorescons[1,7]<-as.data.frame(slope(seg.gb))[2,1]
+scorescons[2,7]<-as.data.frame(slope(seg.wh))[2,1]
+scorescons[3,7]<-as.data.frame(slope(seg.oy))[2,1]
+scorescons[4,7]<-as.data.frame(slope(seg.bf))[2,1]
+scorescons[5,7]<-as.data.frame(slope(seg.fb))[2,1]
+scorescons[6,7]<-as.data.frame(slope(seg.sk))[2,1]
+scorescons[7,7]<-as.data.frame(slope(seg.wp))[2,1]
+scorescons[8,7]<-as.data.frame(slope(seg.hm))[2,1]
+#slope2ci
+scorescons[1,8]<-as.data.frame(slope(seg.gb))[2,1]-as.data.frame(slope(seg.gb))[2,4]
+scorescons[2,8]<-as.data.frame(slope(seg.wh))[2,1]-as.data.frame(slope(seg.wh))[2,4]
+scorescons[3,8]<-as.data.frame(slope(seg.oy))[2,1]-as.data.frame(slope(seg.oy))[2,4]
+scorescons[4,8]<-as.data.frame(slope(seg.bf))[2,1]-as.data.frame(slope(seg.bf))[2,4]
+scorescons[5,8]<-as.data.frame(slope(seg.fb))[2,1]-as.data.frame(slope(seg.fb))[2,4]
+scorescons[6,8]<-as.data.frame(slope(seg.sk))[2,1]-as.data.frame(slope(seg.sk))[2,4]
+scorescons[7,8]<-as.data.frame(slope(seg.wp))[2,1]-as.data.frame(slope(seg.wp))[2,4]
+scorescons[8,8]<-as.data.frame(slope(seg.hm))[2,1]-as.data.frame(slope(seg.hm))[2,4]
 
 
 scorescons
+
+#write.csv(scorescons,"C:/Users/drewv/Documents/UMASS/data/cons_slopes.csv",row.names=F)
 ```
 
 # Breakpoint analysis
@@ -673,11 +713,11 @@ scorescons
    
    
 aictab(mods.brk_con)
-   summary(lm(brkpty~mean,brkpts_con))
+summary(lm(brkpty~s.mean,brkpts_con))
    
-   ggplot(brkpts_con,aes(x=mean,y=brkpty))+
+   ggplot(brkpts_con,aes(x=s.mean,y=brkpty))+
       geom_point(aes(color=oce),size=3)+theme_classic()+geom_smooth(method="lm",se=F,color="black")+ylab(label="Consumption Rate \n log(oysters/day)")+scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
-    scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+theme(text=element_text(family="arial",size=22))+xlab("Mean Temperature (°C)") 
+    scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+theme(text=element_text(family="arial",size=22))+xlab("Summer Mean Temperature (°C)") 
    
 ```
 
@@ -718,14 +758,14 @@ Here, we see that mean temperature is the best predictor according to AIC. Popul
   )
    
    aictab(mods.brk_con)
-   summary(lm(brkptx~mean,brkpts_con))
+   summary(lm(brkptx~s.mean,brkpts_con))
    
-   ggplot(brkpts_con,aes(x=mean,y=brkptx))+
+   ggplot(brkpts_con,aes(x=s.mean,y=brkptx))+
       geom_point(aes(color=oce),size=3)+theme_classic()+geom_smooth(method="lm",se=F,color="black")+ylab(label="Thermal Optima (°C)")+
       scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
       scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean",
       values=c('red','blue'))+theme(text=element_text(family="arial",size=22))+
-      xlab('Mean Temperature (°C)')
+      xlab('Summer Mean Temperature (°C)')
 ```
 
 Here, we see mean site temperature again as the best predictor, and that the pattern of decreasing thermal optima with mean site temperature is preserved so that warmer sites perform best at lower temperatures. However, this pattern was not signficant (P>0.05)
@@ -809,23 +849,25 @@ One reason we are checking quadratic is that sometimes the optima isn't the opti
   #    scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
   #    scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
   #    theme_classic()+labs(y="Rate of Consumption",x="Temperature (?C)")+facet_wrap(Population~.)+geom_point()
+   
+   uro.con3$rate<-log(uro.con3$rate)
    ggplot(uro.con3,aes(y=rate,x=Temp,group=Population,linetype=Population))+
       geom_smooth(method='glm',formula=y~poly(x,2),se=F,aes(color=Population,size=Population))+theme_classic()+
       scale_x_continuous(breaks=c(16,20,24,26,28,30))+
-      scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
-      scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
-      scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
-      theme_classic()+labs(y="Rate of Consumption",x="Temperature (?C)")+scale_y_continuous(breaks=c(0,1,2,3),limits=c(0,3))
+      scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
+      scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
+      scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
+      theme_classic()+labs(y="Log Rate of Consumption",x="Temperature (C)")+theme(text=element_text(family="arial",size=22))
    
    
    
    ggplot(uro.con3,aes(y=rate,x=Temp,group=Population,linetype=Population))+
       geom_smooth(method='glm',formula=y~poly(x,2),se=F,aes(color=Population,size=Population))+theme_classic()+
       scale_x_continuous(breaks=c(16,20,24,26,28,30))+
-      scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
-      scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
-      scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
-      theme_classic()+labs(y="Rate of Consumption",x="Temperature (?C)")+facet_wrap(Population~.)+geom_point()+theme(legend.position = "none")+scale_y_continuous(breaks=c(0,1,2,3),limits=c(0,3))
+      scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
+      scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
+      scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
+      theme_classic()+labs(y="Log Rate of Consumption",x="Temperature (?C)")+facet_wrap(Population~.)+geom_point()+theme(legend.position = "none")+theme(text=element_text(family="arial",size=22))
 ```
 
 ## Y Breakpoint, maximal trait performance, quadratic
@@ -862,16 +904,16 @@ One reason we are checking quadratic is that sometimes the optima isn't the opti
    
    aictab(mods.brkyq)
    
-   brkptxmq<-glm(brkptyq~mean,brkpts_con,family="gaussian")
+   brkptxmq<-lm(brkptyq~lat,brkpts_con)
    summary(brkptxmq)
    
-   ggplot(brkpts_con,aes(x=mean,y=brkptyq))+
+   ggplot(brkpts_con,aes(x=lat,y=brkptyq))+
       geom_point(aes(color=oce),size=3)+geom_smooth(method="lm",se=F,color="black")+
-      theme_classic()+ylab("Maximal Growth (g)")+
+      theme_classic()+ylab("Maximal Consumption (log(oysters/day))")+
       scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
       scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean",
       values=c('red','blue'))+theme(text=element_text(family="arial",size=22))+
-      xlab('Mean Temperature (°C)')
+      xlab('Latitude')
    
 ```
 
@@ -911,7 +953,7 @@ Using quadratic, there is no significant relationship between environment (mean 
    
    aictab(mods.brkxq)
    
-   brkptxmq<-glm(brkptxq~seasonlength10,brkpts_con,family="gaussian")
+   brkptxmq<-lm(brkptxq~seasonlength10,brkpts_con)
    summary(brkptxmq)
    
    ggplot(brkpts_con,aes(x=seasonlength10,y=brkptxq))+

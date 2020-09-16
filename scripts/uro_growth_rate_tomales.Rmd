@@ -116,7 +116,6 @@ library(lubridate)
 library(plyr)
 library(tidyr)
 library(digest)
-library(ggnewscale)
 loadfonts(device = "win")
 
 
@@ -337,26 +336,25 @@ ggplot(deadpop,aes(x=pop,y=n))+geom_bar(stat="identity")+labs(x="Population",y="
 In, between removing snails that ran out of food twice (n=1), died (n=37), or went missing (n=1), there were 393 snails whose growth rates we kept. 
 
 So, there looks like there could be some significant patterns in survival between populations and common garden temperatures. Do we see that? Let's see at just a population and temperature level. 
-```{r,echo=F,warning=F}
+```{r,echo=F}
 growth$dead<-ifelse(growth$alive=="y",0,ifelse(growth$alive=="n",1,NA))
 growth$aliven<-ifelse(growth$alive=="y",1,ifelse(growth$alive=="n",0,NA))
-alivepoptemp<-growth%>%group_by(temp,pop)%>%dplyr::summarise(alivesum=sum(aliven),.groups="drop")
-deadpoptemp<-growth%>%group_by(temp,pop)%>%dplyr::summarise(deadsum=sum(dead),.groups="drop")
+alivepoptemp<-growth%>%group_by(temp,pop)%>%dplyr::summarise(alivesum=sum(aliven))
+deadpoptemp<-growth%>%group_by(temp,pop)%>%dplyr::summarise(deadsum=sum(dead))
 
 empty<-unique(growth[,c('temp','pop')])
 
 
 survival<-data.frame("site"=empty$pop,"temp"=empty$temp,"dead"=deadpoptemp$deadsum,"alive"=alivepoptemp$alivesum)
+
+
 y<-cbind(survival$alive,survival$dead)
-
-summary(aov(data=survival,y~site+temp))
-
 summary(glm(y~site+temp,survival,family=binomial))
 ```
 
 Temperature does have an effect, with increasing survivorship with increasing common garden temperature. As for sites, there may be some differences, but we can't tell this way. We will have to use environmental data as a proxy.
 
-```{r,include=FALSE,warning=F,echo=F}
+```{r,include=F.warning=F,echo=F}
 #lat
 survival$lat<-ifelse(survival$site=="Beaufort",34.819,
               ifelse(survival$site=="Folly Beach",32.660525,
@@ -459,10 +457,9 @@ c0<-(0.13375)
 c1<-(0.09588)
 tempt<-survival$temp
 p1=plogis(c0+c1*tempt)
-comb<-data.frame(tempt,p1)
+comb<-data.frame(mean,p1)
 
-ggplot(growth,aes(x=temp,y=aliven))+geom_jitter(height=0.05,size=2)+geom_smooth(data=comb,aes(x=tempt,y=p1),method="glm",method.args=list(family="binomial"),formula=y~x,color="black")+theme_classic()+scale_x_continuous(name="Common Garden Temperature (°C)",breaks=c(16,20,24,26,28,30),labels=c(16,20,24,26,28,30))+scale_y_discrete(name="Survival",breaks=c(0,1),labels=c(0,1),limits=c(0,1))+theme(text=element_text(family="arial",size=22))
-
+ggplot(growth,aes(x=temp,y=aliven))+geom_jitter()+geom_smooth(data=comb,aes(x=tempt,y=p1),method="glm",method.args=list(family="binomial"),formula=y~x,color="black")
 ```
 
 There is no difference when we look at survival across site, both purely as a comparison between sites as a factor and when we code sites by environmental data. However, survival of juveniles increases with common garden temperature. A cool result!
@@ -536,8 +533,6 @@ ggplot(growth.alive,aes(x=temp,y=cal.length,group=temp))+geom_boxplot()
 
 ## Correlations
 ```{r,include=T,echo=F,warning=F}
-
-
 M <- (growth.alive[,9:12])
 chart.Correlation(M,histogram=TRUE)
 
@@ -551,16 +546,14 @@ Here, we investigate the residuals of the full model (lm(cal.length~pop*temp*oce
 
 ```{r,echo=T,warning=F}
 growth.alive<-na.omit(growth.alive)
-growth.alive.sqrt<-growth.alive
-growth.alive.sqrt$cal.length<-(growth.alive$cal.length)^2
-fulli<-(lm(cal.length~pop*temp*oce*bin,growth.alive.sqrt))
+fulli<-(lm(cal.length~pop*temp*oce*bin,growth.alive))
 
 plot(resid(fulli))
 hist(resid(fulli))
-skewness(growth.alive.sqrt$cal.length)
+skewness(growth.alive$cal.length)
 #negative skew
-growth.alive.sqrt<-tidyr::drop_na(growth.alive.sqrt)
-growth.alive.sqrt<-na.omit(growth.alive.sqrt)
+growth.alive<-tidyr::drop_na(growth.alive)
+growth.alive<-na.omit(growth.alive)
 ```
 Things look ok, but maybe log-transforming growth will improve our skew and residual plots.
 
@@ -678,13 +671,25 @@ oy<-filter(growth.alive,pop=="Oyster")
 sk<-filter(growth.alive,pop=="Skidaway")
 wp<-filter(growth.alive,pop=="Willapa")
 wh<-filter(growth.alive,pop=="Woods Hole")
+to<-read.csv(here::here(('data/tomales.cheng.csv')))
+#to$cal.length<-to$cal.length*(24/27)
+
+bf$cal.length<-bf$cal.length/24
+fb$cal.length<-fb$cal.length/24
+sk$cal.length<-sk$cal.length/24
+oy$cal.length<-oy$cal.length/24
+wh$cal.length<-wh$cal.length/24
+gb$cal.length<-gb$cal.length/24
+wp$cal.length<-wp$cal.length/24
+hm$cal.length<-hm$cal.length/24
+to$cal.length<-to$cal.length/27
 
 #creates segmented models for each population over the common garden temperatures
 m.wh<-glm(cal.length~temp,wh,family=gaussian)
 seg.wh<-segmented(m.wh,seg.Z = ~temp, psi=24,seg.control(maxit.glm=100),fix.npsi=T,n.boot=500)
 
 m.gb<-glm(cal.length~temp,gb,family=gaussian)
-seg.gb<-segmented(m.gb,seg.Z = ~temp, psi=26,seg.control(maxit.glm=100),fix.npsi=T,n.boot=500)
+seg.gb<-segmented(m.gb,seg.Z = ~temp, psi=29,seg.control(maxit.glm=100),fix.npsi=T,n.boot=5000)
 
 m.oy<-glm(cal.length~temp,oy,family=gaussian)
 seg.oy<-segmented(m.oy,seg.Z = ~temp, psi=24)
@@ -696,7 +701,7 @@ m.fb<-glm(cal.length~temp,fb,family=gaussian)
 seg.fb<-segmented(m.fb,seg.Z = ~temp, psi=24)
 
 m.sk<-glm(cal.length~temp,sk,family=gaussian)
-seg.sk<-segmented(m.sk,seg.Z = ~temp, psi=22,seg.control(maxit.glm=100),fix.npsi=T,n.boot=500)
+seg.sk<-segmented(m.sk,seg.Z = ~temp, psi=22)
 
 hm<-na.omit(hm)
 m.hm<-glm(cal.length~temp,hm,family=gaussian)
@@ -705,7 +710,8 @@ seg.hm<-segmented(m.hm,seg.Z = ~temp, psi=24)
 m.wp<-glm(cal.length~temp,wp,family=gaussian)
 seg.wp<-segmented(m.wp,seg.Z = ~temp, psi=24)
 
-
+m.to<-glm(cal.length~temp,to,family="gaussian")
+seg.to<-segmented(m.to,seg.z=~temp,psi=24)
 
 
 
@@ -756,67 +762,65 @@ predicted.hm$cal.length<-predict(seg.hm,predicted.hm)
 predicted.hm$pop<-"hm"
 predicted.hm$oce<-"p"
 
-
+predicted.to<-data.frame(temp=seq(xmin,xmax,length.out=100))
+predicted.to$cal.length<-predict(seg.to,predicted.to)
+predicted.to$pop<-"to"
+predicted.to$oce<-"p"
 
 #combine predicted values into a single dataframe
-all.length.pred<-rbind(predicted.gb,predicted.wh,predicted.oy,predicted.bf,predicted.fb,predicted.sk,predicted.wp,predicted.hm)
+all.length.pred<-rbind(predicted.gb,predicted.wh,predicted.oy,predicted.bf,predicted.fb,predicted.sk,predicted.wp,predicted.hm,predicted.to)
 all.length.pred$population<-all.length.pred$pop
-all.length.pred$population<-factor(all.length.pred$population,levels=c("gb","wh","oy","bf","fb","sk","wp","hm"))
+all.length.pred$population<-factor(all.length.pred$population,levels=c("gb","wh","oy","bf","fb","sk","wp","hm","to"))
 
-all.length.pred$pop<-factor(all.length.pred$pop,levels=c("gb","wh","oy","bf","fb","sk","wp","hm"))
+all.length.pred$pop<-factor(all.length.pred$pop,levels=c("gb","wh","oy","bf","fb","sk","wp","hm","to"))
 
 
-all.length.pred$pop<-ifelse(all.length.pred$pop=="gb","Great Bay",ifelse(all.length.pred$pop=="wh","Woods Hole",ifelse(all.length.pred$pop=="oy","Oyster",ifelse(all.length.pred$pop=="bf","Beaufort",ifelse(all.length.pred$pop=="fb","Folly Beach",ifelse(all.length.pred$pop=="sk","Skidaway",ifelse(all.length.pred$pop=="wp","Willapa",ifelse(all.length.pred$pop=="hm","Humboldt",NA))))))))
+all.length.pred$pop<-ifelse(all.length.pred$pop=="gb","Great Bay",ifelse(all.length.pred$pop=="wh","Woods Hole",ifelse(all.length.pred$pop=="oy","Oyster",ifelse(all.length.pred$pop=="bf","Beaufort",ifelse(all.length.pred$pop=="fb","Folly Beach",ifelse(all.length.pred$pop=="sk","Skidaway",ifelse(all.length.pred$pop=="wp","Willapa",ifelse(all.length.pred$pop=="hm","Humboldt",ifelse(all.length.pred$pop=="to","Tomales",NA)))))))))
 
 all.length.pred$pop<-as.factor(all.length.pred$pop)
-all.length.pred$pop<-factor(all.length.pred$pop,levels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"))
+all.length.pred$pop<-factor(all.length.pred$pop,levels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt","Tomales"))
 
 #give growth alive same pop codes
 growth.alive$population<-ifelse(growth.alive$pop=="gb","Great Bay",ifelse(growth.alive$pop=="wh","Woods Hole",ifelse(growth.alive$pop=="oy","Oyster",ifelse(growth.alive$pop=="bf","Beaufort",ifelse(growth.alive$pop=="fb","Folly Beach",ifelse(growth.alive$pop=="sk","Skidaway",ifelse(growth.alive$pop=="wp","Willapa",ifelse(growth.alive$pop=="hm","Humboldt",NA))))))))
 
 growth.alive$pop<-as.factor(growth.alive$pop)
-growth.alive$population<-factor(growth.alive$pop,levels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"))
-growth.alive$pop<-factor(growth.alive$pop,levels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"))
+growth.alive$population<-factor(growth.alive$pop,levels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt","Tomales"))
+growth.alive$pop<-factor(growth.alive$pop,levels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt","Tomales"))
 
 
 ##unified breakpoints
 ggplot(all.length.pred,aes(x=temp,y=cal.length))+geom_line(aes(group=population,x=temp,y=cal.length,color=population,linetype=population,size=population))+
   ylab("Shell Length (mm)")+xlab("Common Garden Temperature (°C)")+theme_classic()+
   scale_x_continuous(breaks=c(16,20,24,26,28,30))+
-  scale_linetype_manual(values=c(1,1,1,1,1,1,4,4),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
-  scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
-  scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+theme(text=element_text(family="arial",size=22))
+  scale_linetype_manual(values=c(1,1,1,1,1,1,3,3,3),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt","Tomales"),name="Population")+
+  scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt","Tomales"),name="Population")+
+  scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy","forest green"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt","Tomales"),name="Population")+theme(text=element_text(family="arial",size=22))
 
-ggplot()+geom_boxplot(data=growth.alive,aes(x=temp,y=cal.length,group=interaction(pop,temp),color=pop,fill=pop),alpha=0.4)+scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+scale_fill_manual(values=c(NA,NA,NA,NA,NA,NA,"gray","gray","gray"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+new_scale_color()+new_scale_fill()+geom_line(data=all.length.pred,aes(x=temp,y=cal.length,group=population,color=population,linetype=population,size=population))+
+ggplot()+geom_boxplot(data=growth.alive,aes(x=temp,y=cal.length,group=interaction(pop,temp),color=pop,fill=pop),alpha=0.7)+scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy","forest green"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt","Tomales"),name="Population")+scale_fill_manual(values=c(NA,NA,NA,NA,NA,NA,"gray","gray","gray"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt","Tomales"),name="Population")+new_scale_color()+new_scale_fill()+geom_line(data=all.length.pred,aes(x=temp,y=cal.length,group=population,color=population,linetype=population,size=population))+
   ylab("Shell Length (mm)")+xlab("Common Garden Temperature (°C)")+theme_classic()+
   scale_x_continuous(breaks=c(16,20,24,26,28,30))+
-  scale_linetype_manual(values=c(1,1,1,1,1,1,4,4),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
-  scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
-  scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+theme(text=element_text(family="arial",size=22))
+  scale_linetype_manual(values=c(1,1,1,1,1,1,3,3,3),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt","Tomales"),name="Population")+
+  scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt","Tomales"),name="Population")+
+  scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy","forest green"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt","Tomales"),name="Population")+theme(text=element_text(family="arial",size=22))
 
 
 
 ##facetted with points
-all.length.pred<-all.length.pred%>%
-  mutate(pop = fct_relevel(pop, 
-            "Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"))
-
-ggplot()+geom_line(data=all.length.pred,aes(group=pop,x=temp,y=cal.length,color=pop,linetype=pop,size=pop))+
+ggplot(all.length.pred,aes(x=temp,y=cal.length))+geom_line(aes(group=pop,x=temp,y=cal.length,color=pop,linetype=pop,size=pop))+
   ylab("Shell Length (mm)")+xlab("Common Garden Temperature (°C)")+theme_classic()+
   scale_x_continuous(breaks=c(16,20,24,26,28,30))+
   scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="pop")+
   scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="pop")+
-  scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="pop")+theme(text=element_text(family="arial",size=22))+geom_point(data=growth.alive,aes(x=temp,y=cal.length,group=pop))+facet_wrap(pop~.)
+  scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="pop")+theme(text=element_text(family="arial",size=22))+geom_point(data=growth.alive,aes(x=temp,y=cal.length,group=pop))+facet_wrap(pop~.)+theme(legend.position = "none") 
 
 
-#for figure
-lengthTPC<-ggplot(all.length.pred,aes(x=temp,y=cal.length))+geom_line(aes(group=population,x=temp,y=cal.length,color=population,linetype=population,size=population))+
+ggplot(all.length.pred,aes(x=temp,y=cal.length))+geom_line(aes(group=population,x=temp,y=cal.length,color=population,linetype=population,size=population))+
   ylab("Shell Length (mm)")+xlab("Common Garden Temperature (°C)")+theme_classic()+
   scale_x_continuous(breaks=c(16,20,24,26,28,30))+
-  scale_linetype_manual(values=c(1,1,1,1,1,1,4,4),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
-  scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
-  scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+theme(text=element_text(family="arial",size=22))+theme(text=element_text(family="arial",size=22))+theme(legend.position = "none") 
-lengthTPC
+  scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("New Hampshire","Massachusetts","Virginia","North Carolina","South Carolina","Georgia","Washington (invasive)","California (invasive"),name="Population")+
+  scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("New Hampshire","Massachusetts","Virginia","North Carolina","South Carolina","Georgia","Washington (invasive)","California (invasive"),name="Population")+
+  scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("New Hampshire","Massachusetts","Virginia","North Carolina","South Carolina","Georgia","Washington (invasive)","California (invasive"),name="Population")+theme(text=element_text(family="arial",size=22))
+#+geom_boxplot(data=growth.alive,aes(x=temp,y=cal.length,group=interaction(temp,pop),fill=pop))
 ```
 
  Here, I show the segmented model fits both on a single plot and facetted to show spread of points. Just by eyeballing the results, we see that more or less the northern sites have optima above those of southern sites. We will test for this later. First, how confident are we in these breakpoints? The tests below tell us.
@@ -833,7 +837,6 @@ lengthTPC
 ```{r,echo=F,warning=F,include=F}
 scores<-data.frame("site" = c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),"breakpoint"=NA,"P Score"=NA,"Davies Test"=NA,"slope1"=NA,"CI slope 1"=NA,"slope2"=NA,"CI slope 2"=NA)
 
-#brkpts x
 scores[1,2]<-confint(seg.gb)[[1]]
 scores[2,2]<-confint(seg.wh)[[1]]
 scores[3,2]<-confint(seg.oy)[[1]]
@@ -842,7 +845,7 @@ scores[5,2]<-confint(seg.fb)[[1]]
 scores[6,2]<-confint(seg.sk)[[1]]
 scores[7,2]<-confint(seg.wp)[[1]]
 scores[8,2]<-confint(seg.hm)[[1]]
-#pscore
+
 scores[1,3]<-pscore.test(seg.gb,~temp)[[5]]
 scores[2,3]<-pscore.test(seg.wh,~temp)[[5]]
 scores[3,3]<-pscore.test(seg.oy,~temp)[[5]]
@@ -851,7 +854,7 @@ scores[5,3]<-pscore.test(seg.fb,~temp)[[5]]
 scores[6,3]<-pscore.test(seg.sk,~temp)[[5]]
 scores[7,3]<-pscore.test(seg.wp,~temp)[[5]]
 scores[8,3]<-pscore.test(seg.hm,~temp)[[5]]
-#davies
+
 scores[1,4]<-davies.test(seg.gb,~temp)[[5]]
 scores[2,4]<-davies.test(seg.wh,~temp)[[5]]
 scores[3,4]<-davies.test(seg.oy,~temp)[[5]]
@@ -860,7 +863,7 @@ scores[5,4]<-davies.test(seg.fb,~temp)[[5]]
 scores[6,4]<-davies.test(seg.sk,~temp)[[5]]
 scores[7,4]<-davies.test(seg.wp,~temp)[[5]]
 scores[8,4]<-davies.test(seg.hm,~temp)[[5]]
-#slope1
+
 scores[1,5]<-as.data.frame(slope(seg.gb))[1,1]
 scores[2,5]<-as.data.frame(slope(seg.wh))[1,1]
 scores[3,5]<-as.data.frame(slope(seg.oy))[1,1]
@@ -869,7 +872,7 @@ scores[5,5]<-as.data.frame(slope(seg.fb))[1,1]
 scores[6,5]<-as.data.frame(slope(seg.sk))[1,1]
 scores[7,5]<-as.data.frame(slope(seg.wp))[1,1]
 scores[8,5]<-as.data.frame(slope(seg.hm))[1,1]  
-#slope1Ci  
+  
 scores[1,6]<-as.data.frame(slope(seg.gb))[1,1]-as.data.frame(slope(seg.gb))[1,4]
 scores[2,6]<-as.data.frame(slope(seg.wh))[1,1]-as.data.frame(slope(seg.wh))[1,4]
 scores[3,6]<-as.data.frame(slope(seg.oy))[1,1]-as.data.frame(slope(seg.oy))[1,4]
@@ -878,7 +881,8 @@ scores[5,6]<-as.data.frame(slope(seg.fb))[1,1]-as.data.frame(slope(seg.fb))[1,4]
 scores[6,6]<-as.data.frame(slope(seg.sk))[1,1]-as.data.frame(slope(seg.sk))[1,4]
 scores[7,6]<-as.data.frame(slope(seg.wp))[1,1]-as.data.frame(slope(seg.wp))[1,4]
 scores[8,6]<-as.data.frame(slope(seg.hm))[1,1]-as.data.frame(slope(seg.hm))[1,4]
-#slope2
+
+
 scores[1,7]<-as.data.frame(slope(seg.gb))[2,1]
 scores[2,7]<-as.data.frame(slope(seg.wh))[2,1]
 scores[3,7]<-as.data.frame(slope(seg.oy))[2,1]
@@ -887,7 +891,7 @@ scores[5,7]<-as.data.frame(slope(seg.fb))[2,1]
 scores[6,7]<-as.data.frame(slope(seg.sk))[2,1]
 scores[7,7]<-as.data.frame(slope(seg.wp))[2,1]
 scores[8,7]<-as.data.frame(slope(seg.hm))[2,1]
-#slope2ci
+
 scores[1,8]<-as.data.frame(slope(seg.gb))[2,1]-as.data.frame(slope(seg.gb))[2,4]
 scores[2,8]<-as.data.frame(slope(seg.wh))[2,1]-as.data.frame(slope(seg.wh))[2,4]
 scores[3,8]<-as.data.frame(slope(seg.oy))[2,1]-as.data.frame(slope(seg.oy))[2,4]
@@ -898,7 +902,6 @@ scores[7,8]<-as.data.frame(slope(seg.wp))[2,1]-as.data.frame(slope(seg.wp))[2,4]
 scores[8,8]<-as.data.frame(slope(seg.hm))[2,1]-as.data.frame(slope(seg.hm))[2,4]
 
 scores
-write.csv(scores,"C:/Users/drewv/Documents/UMASS/data/length_slopes.csv",row.names=F)
 ```
 ```{r}
 subset(scores[,c(1:2,5:8)])
@@ -909,10 +912,10 @@ subset(scores[,c(1:2,5:8)])
 To be able to complete statistical analysis of the differences in TPC curves, I extracted the x and y componenets of each curve to give me the thermal optima and maximal trait performance, respectively. This extraction is silenced in code. Once we have extracted the thermal optima and maximal trait performance, we can move on to the relationship between environment and each breakpoint componenet. 
 
 ```{r,include=F,echo=F,warning=F}
-brkpts<-data.frame(matrix(,nrow=8,ncol=19))
+brkpts<-data.frame(matrix(,nrow=9,ncol=19))
 colnames(brkpts)<-c("pop","brkptx","brkpty","lat","mean","s.mean","q.mean","t.mean","oce","brkptx_se","se_lower","se_higher","brkpty_se","max","NA","brkptyq","brkptxq","seasonlength10","seasonlength12")
 
-brkpts$pop<-c("Willapa","Humboldt","Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway")
+brkpts$pop<-c("Willapa","Humboldt","Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Tomales")
 
 brkpts[1,2]<-seg.wp$psi[[2]]
 brkpts[2,2]<-seg.hm$psi[[2]]
@@ -922,7 +925,7 @@ brkpts[5,2]<-seg.oy$psi[[2]]
 brkpts[6,2]<-seg.bf$psi[[2]]
 brkpts[7,2]<-seg.fb$psi[[2]]
 brkpts[8,2]<-seg.sk$psi[[2]]
-
+brkpts[9,2]<-seg.to$psi[[2]]
 
 brkpts[1,3]<-(seg.wp$psi[[2]]*coef(seg.wp)[[2]])+(coef(seg.wp)[[1]])
 brkpts[2,3]<-(seg.hm$psi[[2]]*coef(seg.hm)[[2]])+(coef(seg.hm)[[1]])
@@ -932,26 +935,26 @@ brkpts[5,3]<-(seg.oy$psi[[2]]*coef(seg.oy)[[2]])+(coef(seg.oy)[[1]])
 brkpts[6,3]<-(seg.bf$psi[[2]]*coef(seg.bf)[[2]])+(coef(seg.bf)[[1]])
 brkpts[7,3]<-(seg.fb$psi[[2]]*coef(seg.fb)[[2]])+(coef(seg.fb)[[1]])
 brkpts[8,3]<-(seg.sk$psi[[2]]*coef(seg.sk)[[2]])+(coef(seg.sk)[[1]])
-
+brkpts[9,3]<-(seg.to$psi[[2]]*coef(seg.to)[[2]])+(coef(seg.to)[[1]])
 
 #lat
 brkpts$lat<-ifelse(brkpts$pop=="Beaufort",34.819,ifelse(brkpts$pop=="Folly Beach",32.660525,
                                                         ifelse(brkpts$pop=="Great Bay",43.089589,ifelse(brkpts$pop=="Humboldt",40.849448,ifelse(brkpts$pop=="Oyster",
-                                                                                                                                                37.288562,ifelse(brkpts$pop=="Tomales",38.12805,ifelse(brkpts$pop=="Woods Hole",41.57687,ifelse(brkpts$pop=="Willapa",46.5007,ifelse(brkpts$pop=="Skidaway",31.970
-,NA)))))))))
+                                                                                                                                                37.288562,ifelse(brkpts$pop=="Tomales",38.12805,ifelse(brkpts$pop=="Woods Hole",41.57687,ifelse(brkpts$pop=="Willapa",46.5007,ifelse(brkpts$pop=="Skidaway",31.970,ifelse(brkpts$pop=="Tomales",38.12805
+,NA))))))))))
 
 means<-data.frame(with(temp,tapply(WTMP,site,mean)))
 
 #means
-brkpts[1,5]<-means[7,1]#wp
-brkpts[2,5]<-means[8,1]#hm
-brkpts[3,5]<-means[1,1]#gb
-brkpts[4,5]<-means[2,1]#wh
-brkpts[5,5]<-means[3,1]#oy
-brkpts[6,5]<-means[4,1]#bf
-brkpts[7,5]<-means[5,1]#fb
-brkpts[8,5]<-means[6,1]#sk
-
+brkpts[1,5]<-means[2,1]
+brkpts[2,5]<-means[1,1]
+brkpts[3,5]<-means[8,1]
+brkpts[4,5]<-means[7,1]
+brkpts[5,5]<-means[6,1]
+brkpts[6,5]<-means[5,1]
+brkpts[7,5]<-means[4,1]
+brkpts[8,5]<-means[3,1]
+brkpts[9,5]<-17.90621222
 
 #s.mean
 brkpts[1,6]<-s.mean[6,1]
@@ -962,7 +965,7 @@ brkpts[5,6]<-s.mean[7,1]
 brkpts[6,6]<-s.mean[1,1]
 brkpts[7,6]<-s.mean[2,1]
 brkpts[8,6]<-s.mean[4,1]
-
+brkpts[9,6]<-20.91788908
 
 #q.mean
 brkpts[1,7]<-q[6,2]
@@ -973,7 +976,7 @@ brkpts[5,7]<-q[3,2]
 brkpts[6,7]<-q[4,2]
 brkpts[7,7]<-q[5,2]
 brkpts[8,7]<-q[9,2]
-
+brkpts[9,7]<-22.1473
 
 #t.mean
 brkpts[1,8]<-q[6,3]
@@ -984,7 +987,7 @@ brkpts[5,8]<-q[3,3]
 brkpts[6,8]<-q[4,3]
 brkpts[7,8]<-q[5,3]
 brkpts[8,8]<-q[9,3]
-
+brkpts[9,8]<-22.711
 
 #max
 brkpts[1,14]<-q[6,4]
@@ -995,7 +998,7 @@ brkpts[5,14]<-q[3,4]
 brkpts[6,14]<-q[4,4]
 brkpts[7,14]<-q[5,4]
 brkpts[8,14]<-q[9,4]
-
+brkpts[9,14]<-24.1218
 
 #seasonlength10
 brkpts[1,18]<-q[6,7]
@@ -1006,7 +1009,7 @@ brkpts[5,18]<-q[3,7]
 brkpts[6,18]<-q[4,7]
 brkpts[7,18]<-q[5,7]
 brkpts[8,18]<-q[9,7]
-
+brkpts[9,18]<-to3%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>10)%>%tally
 
 #seasonlength12
 brkpts[1,19]<-q[6,8]
@@ -1017,6 +1020,9 @@ brkpts[5,19]<-q[3,8]
 brkpts[6,19]<-q[4,8]
 brkpts[7,19]<-q[5,8]
 brkpts[8,19]<-q[9,8]
+brkpts[9,19]<-to3%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>12.5)%>%tally
+
+
 
 #brkptx_se
 brkpts[1,10]<-seg.wp$psi[[3]]
@@ -1066,8 +1072,6 @@ brkpts$oce<-ifelse(brkpts$pop=="Beaufort","a",ifelse(brkpts$pop=="Folly Beach","
 brkpts$seasonlength10<-as.numeric(brkpts$seasonlength10)
 brkpts$seasonlength12<-as.numeric(brkpts$seasonlength12)
 brkpts$pop<-as.factor(brkpts$pop)
-
-#write.csv(brkpts,"C:/Users/drewv/Documents/UMASS/data/length_brkpts.csv",row.names=F)
 
 ```
 
@@ -1146,7 +1150,7 @@ ggplot(brkpts,aes(x=seasonlength10,y=brkpty))+
   geom_smooth(method='lm',se=F,color="black")+scale_shape_manual(labels=c("Atlantic","Pacific"),name="Ocean",values=c(16,17))
 ```
 
-When we look at season length when calculated at 10C, we see a significant relationship between maximal trait performance and season length. This trend becomes less signficant when we calculate it at 12.5C, mostly because our Pacific sites "ungroup" from the Atlantic sites. At 10C season length, we could be seeing possible countergradient variation! The one weird point in the Atlantic is Woods Hole. Anecdotal, I could attribute this to the very hot local conditions in the estuary, but can't say for sure. 
+When we look at season length when calculated at 10C, we see a significant relationship between maximal trait performance and season length. This trend becomes less signficant when we calculate it at 12.5C, mostly because our Pacific sites "ungroup" from the Atlantic sites. At 10C season length, we could be seeing possible countergradient variation! The one weird point in the Pacific is Brian's Tomales data. If we remove it, we get signficant results
 
 But what about the thermal optima?
 
@@ -1190,15 +1194,12 @@ brkptym<-lm(brkptx~seasonlength10,brkpts)
 summary(brkptym)
 
 ggplot(brkpts,aes(x=seasonlength10,y=brkptx))+
-  geom_point(size=3,aes(color=oce,shape=oce))+geom_smooth(method="lm",se=F,color="black")+theme_classic()+
-  ylab("Thermal Optima (°C)")+
-  xlab("Season Length (days), 10°C")+
+  geom_point(size=3,aes(color=oce))+geom_smooth(method="lm",se=F,color="black")+theme_classic()+
+  ylab("Thermal Optima")+
+  xlab("Season Length (10C)")+
   theme(text=element_text(family="arial",size=22))+
   scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
-  scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
-  scale_shape_manual(labels=c("Atlantic","Pacific"),name="Ocean",values=c(16,17))+scale_y_continuous(breaks=seq(20,30,2))+
-  expand_limits(y=c(20,30))
-                                                                                                   
+  scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))
   
 
 ```
@@ -1208,7 +1209,7 @@ Here, mean tempeature is the best predictor. However, season length 10 is also w
 
 #### Sensitivity analysis
 
-Woods Hole seems to be an outlier for this pattern of decreasing thermal optima with season length. This is possibly due to very local-level effects of where we collected the woods hole population. what would happen if we remove it?
+Tomales seems to be an outlier for this pattern of decreasing thermal optima with season length. what would happen if we remove it?
 
 ```{r,include=T,echo=F,warning=F}
 
@@ -1335,13 +1336,13 @@ ggplot(growth.alive,aes(y=cal.length,x=temp,group=pop,linetype=pop))+geom_smooth
 theme_classic()+theme(legend.position = "none")+labs(y="Shell Length (mm)",x="Temperature (°C)")+scale_x_continuous(breaks=c(16,20,24,26,28,30))+
   scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="population")+
   scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="population")+
-  scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+facet_wrap(pop~.)+geom_point()+theme(text=element_text(family="arial",size=22))
+  scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+facet_wrap(pop~.)+geom_point()
 
 ggplot(growth.alive,aes(y=cal.length,x=temp,group=pop,linetype=pop))+geom_smooth(method='lm',formula=y~poly(x,2),se=F,aes(color=pop,size=pop))+
 theme_classic()+labs(y="Shell Length (mm)",x="Temperature (°C)")+scale_x_continuous(breaks=c(16,20,24,26,28,30))+
   scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
   scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
-  scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+theme(text=element_text(family="arial",size=22))
+  scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")
 
 
 
@@ -1396,13 +1397,13 @@ mods.brkyq<-list(
 aictab(mods.brkyq)
 #mean is the most highly supported model this time. 
 
-brkptxmq<-lm(brkptyq~seasonlength10,brkpts)
+brkptxmq<-glm(brkptyq~mean,brkpts,family="gaussian")
 summary(brkptxmq)
 
-ggplot(brkpts,aes(x=seasonlength10,y=brkptyq))+
+ggplot(brkpts,aes(x=mean,y=brkptyq))+
   geom_point(size=3,aes(color=oce))+geom_smooth(method="lm",se=F,color="black")+theme_classic()+
   ylab("Thermal Optima")+
-  xlab("Season Length (days), 10C")+
+  xlab("Mean (degrees C)")+
   theme(text=element_text(family="arial",size=22))+
   scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
   scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))
@@ -1441,13 +1442,13 @@ mods.brkxq<-list(
 
 aictab(mods.brkxq)
 
-brkptxmq<-lm(brkptxq~seasonlength12,brkpts)
+brkptxmq<-glm(brkptxq~seasonlength10,brkpts,family="gaussian")
 summary(brkptxmq)
 
-ggplot(brkpts,aes(x=seasonlength12,y=brkptxq))+
+ggplot(brkpts,aes(x=seasonlength10,y=brkptxq))+
   geom_point(size=3,aes(color=oce))+geom_smooth(method="lm",se=F,color="black")+theme_classic()+
   ylab("Maximal Growth rate (mm)")+
-  xlab("Season Length (days,12C)")+
+  xlab("Season Length (days,10C)")+
   theme(text=element_text(family="arial",size=22))+
   scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
   scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))
@@ -1462,9 +1463,9 @@ Finally, let us compare the breakpoints we have extracted from segmented and qua
 brkptnewx<-gather(brkpts, modeltypex, x, c(brkptx,brkptyq)) 
 brkptnewy<-gather(brkpts,modeltypey,y,c(brkpty,brkptxq))
 
-ggplot(brkptnewx,aes(x=seasonlength10,y=x,group=modeltypex,color=modeltypex))+geom_point()+theme_classic()+scale_color_manual(labels=c("Segmented","Quadratic"),name="Thermal Optima",values=c("red","blue"))+geom_smooth(method=lm,se=F)+theme(text=element_text(family="arial",size=22))+ylab("Thermal Optima")+xlab("Season Length (days), 10C")
+ggplot(brkptnewx,aes(x=seasonlength10,y=x,group=modeltypex,color=modeltypex))+geom_point()+theme_classic()+scale_color_manual(labels=c("Segmented","Quadratic"),name="Thermal Optima",values=c("red","blue"))+geom_smooth(method=lm,se=F)
 
-ggplot(brkptnewy,aes(x=seasonlength10,y=y,group=modeltypey,color=modeltypey))+geom_point()+theme_classic()+scale_color_manual(labels=c("Segmented","Quadratic"),name="Maximal Trait Performance",values=c("red","blue"))+geom_smooth(method=lm,se=F)+theme(text=element_text(family="arial",size=22))+ylab("Maximal Trait Performance")+xlab("Season Length (days), 10C")
+ggplot(brkptnewy,aes(x=seasonlength10,y=y,group=modeltypey,color=modeltypey))+geom_point()+theme_classic()+scale_color_manual(labels=c("Segmented","Quadratic"),name="Maximal Trait Performance",values=c("red","blue"))+geom_smooth(method=lm,se=F)
 
 brkptnewx$pop<-as.character(brkptnewx$pop)
 summary(lm(x~modeltypex,brkptnewx))
@@ -1477,7 +1478,7 @@ summary(lm(y~modeltypey,brkptnewy))
 ```{r,include=F}
 
 #brkpts$pop<-unlist(brkpts$pop)
-#write.csv(brkpts,"C:/Users/drewv/Documents/UMASS/data/length_brkpts.csv",row.names=F)
+#write.csv(brkpts,"C:/Users/drewv/Documents/UMASS/data/growth_cal.csv",row.names=F)
 ```
 
 
