@@ -3,8 +3,8 @@ title: "Urosalpinx growth rate (length)"
 author: "Andrew Villeneuve"
 date: "2/25/2020"
 output:
-  word_document: default
   html_document: default
+  word_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -245,8 +245,8 @@ predicted.gb$pop<-"gb"
 predicted.gb$oce<-"a"
 
 ggplot(predicted.gb,aes(x=temp,y=cal.length))+geom_line(aes(group=pop,x=temp,y=cal.length,color=pop,linetype=pop,size=pop))+
-  ylab("Shell Length (mm)")+xlab("Common Garden Temperature (°C)")+theme_classic()+
-  scale_x_continuous(breaks=c(16,20,24,26,28,30))+geom_point(data=gb,aes(x=temp,y=cal.length))+scale_y_continuous(breaks=c(0,1,2,3,4,5))
+  ylab("Growth rate (mm)")+xlab("Common Garden Temperature (°C)")+theme_classic()+
+  scale_x_continuous(breaks=c(16,20,24,26,28,30))+geom_point(data=gb,aes(x=temp,y=cal.length))+scale_y_continuous(breaks=c(0,1,2,3,4,5))+theme(text=element_text(family="arial",size=22))+theme(text=element_text(family="arial",size=22))+theme(legend.position = "none")+scale_color_manual(values="purple") 
 
 #extract breakpoint points
 brkpts_seg<-data.frame(matrix(,nrow=1,ncol=6))

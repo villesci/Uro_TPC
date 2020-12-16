@@ -175,6 +175,26 @@ temp$date<-as.Date(temp$rdate)
 temp$site<-factor(temp$site, levels=c("gbj","wh","oy","bf","fb","GCSK","nah15","hmi2"))
 #"Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"
 
+#egg laying mean
+lay_sk<-mean((filter(gcsk,rdate>"2018-03-01 00:00:00" & rdate< "2018-03-30 00:00:00"))$WTMP)
+lay_fb<-mean((filter(fb,rdate>"2018-03-01 00:00:00" & rdate< "2018-03-30 00:00:00"))$WTMP)
+lay_bf<-mean((filter(bf,rdate>"2018-03-15 00:00:00" & rdate< "2018-04-15 00:00:00"))$WTMP)
+lay_oy<-mean((filter(oy,rdate>"2018-05-01 00:00:00" & rdate< "2018-05-30 00:00:00"))$WTMP)
+lay_wh<-mean((filter(wh,rdate>"2018-05-15 00:00:00" & rdate< "2018-06-15 00:00:00"))$WTMP)
+lay_gb<-mean((filter(gbj,rdate>"2018-06-01 00:00:00" & rdate< "2018-06-30 00:00:00"))$WTMP)
+lay_hm<-mean((filter(hmi2,rdate>"2018-04-15 00:00:00" & rdate< "2018-05-15 00:00:00"))$WTMP)#inat
+lay_wp<-mean((filter(nah1516,rdate>"2018-04-15 00:00:00" & rdate< "2018-05-15 00:00:00"))$WTMP)#ruesink
+#max
+lay_sk2<-mean((filter(gcsk,rdate>"2018-03-01 00:00:00" & rdate< "2018-05-30 00:00:00"))$WTMP)
+lay_fb2<-mean((filter(fb,rdate>"2018-03-01 00:00:00" & rdate< "2018-05-30 00:00:00"))$WTMP)
+lay_bf2<-mean((filter(bf,rdate>"2018-03-15 00:00:00" & rdate< "2018-05-30 00:00:00"))$WTMP)
+lay_oy2<-mean((filter(oy,rdate>"2018-05-01 00:00:00" & rdate< "2018-07-30 00:00:00"))$WTMP)
+lay_wh2<-mean((filter(wh,rdate>"2018-07-01 00:00:00" & rdate< "2018-08-31 00:00:00"))$WTMP)
+lay_gb2<-mean((filter(gbj,rdate>"2018-07-01 00:00:00" & rdate< "2018-08-31 00:00:00"))$WTMP)
+lay_hm2<-mean((filter(hmi2,rdate>"2018-06-1 00:00:00" & rdate< "2018-07-15 00:00:00"))$WTMP)#inat
+lay_wp2<-mean((filter(nah1516,rdate>"2018-06-1 00:00:00" & rdate< "2018-07-15 00:00:00"))$WTMP)#ruesink
+
+
 
 ```
 # The Study
@@ -278,9 +298,36 @@ q
 # Data Exploration
 As explained in the introduction, we checked for consumption rate three times during the 24 day experiment. Each time we checked, was coded as t1, t2, or t3. Below, we can see why we focus on t3 for this anlaysis over the other two timepoints. A wider range of consumption rates. As a result, I will filter out timepoints 1 and 2 and keep t3 observations only. This is because site differences only begin to become obvious after some time, and any difference in consumption rates will therefore also only appear as snails continue to grow.
 ```{r,echo=F,warning=F}
-ggplot(uro.con,aes(x=Temp,y=rate,color=Population))+geom_smooth(se=F)+geom_jitter(aes(fill=Population))+facet_wrap(timepoint~.)
+uro.con$rate<-log(uro.con$rate)
+ggplot(uro.con,aes(x=Temp,y=rate,color=Population,linetype=Population))+geom_smooth(se=F,method="loess")+facet_wrap(timepoint~.)+theme_classic()+theme(text=element_text(family="arial",size=22))+scale_x_continuous(breaks=c(16,20,24,26,28,30))+
+  scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
+  scale_linetype_manual(values=c(1,1,1,1,1,1,4,4),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
+  scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+geom_jitter(width=0.5)+xlab("Temperature (°C)")+ylab("Consumption rate (log(oysters/day))")
+
+
+uro.con$timepoint<-as.factor(uro.con$timepoint)
+
+summary(glm(no.consumed~(Population)*(timepoint)*Temp,uro.con,family=nbinom2,offset=log(duration)))
+summary(glm(no.consumed~(Population)*(timepoint),uro.con,family=nbinom2,offset=log(duration)))
+summary(glm(no.consumed~(Population)*Temp,uro.con,family=nbinom2,offset=log(duration)))
 
 uro.con3<-filter(uro.con,timepoint=="3")
+uro.con2<-filter(uro.con,timepoint=="2")
+uro.con1<-filter(uro.con,timepoint=="1")
+
+
+summary(glm(no.consumed~(Population)*(Temp),uro.con3,family=nbinom2,offset=log(duration)))
+summary(glm(no.consumed~(Population)*(Temp),uro.con2,family=nbinom2,offset=log(duration)))
+summary(glm(no.consumed~(Population)*(Temp),uro.con1,family=nbinom2,offset=log(duration)))
+
+
+summary(aov(no.consumed~Population*Temp*timepoint, uro.con,offset=log(duration)))
+
+
+
+summary(aov(no.consumed~Population*Temp*timepoint, uro.con,offset=log(duration)))
+
+
 
 ```
 
@@ -462,7 +509,7 @@ uro.con$Population<-factor(uro.con$Population,levels=c("Great Bay","Woods Hole",
 
 
 ggplot(all.cons.pred,aes(x=Temp,y=log_rate,group=pop))+geom_line(aes(group=pop,color=pop,linetype=pop),size=1.5)+
-  ylab("Consumption rate (log(oysters/day))")+xlab("Common Garden Temperature")+theme_classic()+
+  ylab("Consumption rate (log(oysters/day))")+xlab("Temperature (°C)")+theme_classic()+
   scale_linetype_manual(values=c(1,1,1,1,1,1,4,4),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
   scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+scale_x_continuous(breaks=c(16,20,24,26,28,30))+theme(text=element_text(family="arial",size=22))
 
@@ -478,7 +525,8 @@ ggplot(all.cons.pred,aes(x=Temp,y=log_rate,group=pop))+geom_line(aes(group=pop,c
 #for figure
 consTPC<-ggplot(all.cons.pred,aes(x=Temp,y=log_rate,group=pop))+geom_line(aes(group=pop,color=pop,linetype=pop),size=1.5)+
   ylab("Consumption rate (log(oysters/day))")+xlab("Common Garden Temperature")+theme_classic()+
-  scale_linetype_manual(values=c(1,1,1,1,1,1,4,4),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
+  scale_linetype_manual(values=c(1,1,1,1,1,1,4,4),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly B
+                                                           each, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
   scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+scale_x_continuous(breaks=c(16,20,24,26,28,30))+theme(text=element_text(family="arial",size=22))
 
 
@@ -590,7 +638,26 @@ brkpts_con[8,15]<-q[9,8]
    brkpts_con$oce<-ifelse(brkpts_con$pop=="Beaufort","a",ifelse(brkpts_con$pop=="Folly Beach","a",ifelse(brkpts_con$pop=="Great Bay","a",ifelse(brkpts_con$pop=="Humboldt","p",ifelse(brkpts_con$pop=="Oyster","a",ifelse(brkpts_con$pop=="Tomales","p",ifelse(brkpts_con$pop=="Woods Hole","a",ifelse(brkpts_con$pop=="Willapa","p",ifelse(brkpts_con$pop=="Skidaway","a",NA)))))))))
    
    brkpts_con$pop<-as.character(brkpts_con$pop)
+   
+   brkpts_con$spring<-NA
+brkpts_con[8,16]<-lay_sk
+brkpts_con[7,16]<-lay_fb
+brkpts_con[6,16]<-lay_bf
+brkpts_con[5,16]<-lay_oy
+brkpts_con[4,16]<-lay_wh
+brkpts_con[3,16]<-lay_gb
+brkpts_con[2,16]<-lay_hm
+brkpts_con[1,16]<-lay_wp
 
+   brkpts_con$spring2<-NA
+brkpts_con[8,17]<-lay_sk2
+brkpts_con[7,17]<-lay_fb2
+brkpts_con[6,17]<-lay_bf2
+brkpts_con[5,17]<-lay_oy2
+brkpts_con[4,17]<-lay_wh2
+brkpts_con[3,17]<-lay_gb2
+brkpts_con[2,17]<-lay_hm2
+brkpts_con[1,17]<-lay_wp2
 ```
 
 Here, we see that the stacking of regressions is not as clear as with shell length or weight (separate markdown). To see if countergradient variation in still present, we will have to extract breakpoints. First off, how confident are we in our breakpoints?
@@ -685,14 +752,6 @@ scorescons
    
    mods.brk_con<-list(
   "nullo"=glm(brkpty~1,brkpts_con,family="gaussian"),
-  "lato"=glm(brkpty~lat+oce,brkpts_con,family="gaussian"),
-  "meano"=glm(brkpty~mean+oce,brkpts_con,family="gaussian"),
-  "s.meano"=glm(brkpty~s.mean+oce,brkpts_con,family="gaussian"),
-  "q.meano"=glm(brkpty~q.mean+oce,brkpts_con,family="gaussian"),
-  "t.meano"=glm(brkpty~t.mean+oce,brkpts_con,family="gaussian"),
-  "seasonlengtho10"=glm(brkpty~seasonlength10+oce,brkpts_con,family="gaussian"),
-  "seasonlengtho16"=glm(brkpty~seasonlength16+oce,brkpts_con,family="gaussian"),
-  "maxo"=glm(brkpty~max+oce,brkpts_con,family="gaussian"),
   "lat"=glm(brkpty~lat,brkpts_con,family="gaussian"),
   "mean"=glm(brkpty~mean,brkpts_con,family="gaussian"),
   "s.mean"=glm(brkpty~s.mean,brkpts_con,family="gaussian"),
@@ -701,23 +760,17 @@ scorescons
   "seasonlength10"=glm(brkpty~seasonlength10,brkpts_con,family="gaussian"),
   "seasonlength16"=glm(brkpty~seasonlength16,brkpts_con,family="gaussian"),
   "omax"=glm(brkpty~max,brkpts_con,family="gaussian"),
-  "o*lat"=glm(brkpty~lat*oce,brkpts_con,family="gaussian"),
-  "o*mean"=glm(brkpty~mean*oce,brkpts_con,family="gaussian"),
-  "o*s.mean"=glm(brkpty~s.mean*oce,brkpts_con,family="gaussian"),
-  "o*q.mean"=glm(brkpty~q.mean*oce,brkpts_con,family="gaussian"),
-  "o*t.mean"=glm(brkpty~t.mean*oce,brkpts_con,family="gaussian"),
-  "o*seasonlength10"=glm(brkpty~seasonlength10*oce,brkpts_con,family="gaussian"),
-  "seasonlength16"=glm(brkpty~seasonlength16*oce,brkpts_con,family="gaussian"),
-  "o*max"=glm(brkpty~max*oce,brkpts_con,family="gaussian")
+  "spring"=glm(brkpty~spring,brkpts_con,family="gaussian"),
+    "spring2"=glm(brkpty~spring2,brkpts_con,family="gaussian")
   )
    
    
 aictab(mods.brk_con)
-summary(lm(brkpty~s.mean,brkpts_con))
+summary(lm(brkpty~mean,brkpts_con))
    
-   ggplot(brkpts_con,aes(x=s.mean,y=brkpty))+
-      geom_point(aes(color=oce),size=3)+theme_classic()+geom_smooth(method="lm",se=F,color="black")+ylab(label="Consumption Rate \n log(oysters/day)")+scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
-    scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+theme(text=element_text(family="arial",size=22))+xlab("Summer Mean Temperature (°C)") 
+   ggplot(brkpts_con,aes(x=mean,y=brkpty))+
+      geom_point(aes(color=oce),size=3)+theme_classic()+ylab(label="Maximal Consumption Rate \n log(oysters/day)")+scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
+    scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+theme(text=element_text(family="arial",size=22))+xlab("MAT (°C)")+scale_x_continuous(limits=c(12,22),breaks=seq(12,22,by=2)) 
    
 ```
 
@@ -731,14 +784,6 @@ Here, we see that mean temperature is the best predictor according to AIC. Popul
    #x point (t opt)
    mods.brk_con<-list(
   "nullo"=glm(brkptx~1,brkpts_con,family="gaussian"),
-  "lato"=glm(brkptx~lat+oce,brkpts_con,family="gaussian"),
-  "meano"=glm(brkptx~mean+oce,brkpts_con,family="gaussian"),
-  "s.meano"=glm(brkptx~s.mean+oce,brkpts_con,family="gaussian"),
-  "q.meano"=glm(brkptx~q.mean+oce,brkpts_con,family="gaussian"),
-  "t.meano"=glm(brkptx~t.mean+oce,brkpts_con,family="gaussian"),
-  "seasonlengtho10"=glm(brkptx~seasonlength10+oce,brkpts_con,family="gaussian"),
-  "seasonlengtho16"=glm(brkptx~seasonlength16+oce,brkpts_con,family="gaussian"),
-  "maxo"=glm(brkptx~max+oce,brkpts_con,family="gaussian"),
   "lat"=glm(brkptx~lat,brkpts_con,family="gaussian"),
   "mean"=glm(brkptx~mean,brkpts_con,family="gaussian"),
   "s.mean"=glm(brkptx~s.mean,brkpts_con,family="gaussian"),
@@ -747,25 +792,19 @@ Here, we see that mean temperature is the best predictor according to AIC. Popul
   "seasonlength10"=glm(brkptx~seasonlength10,brkpts_con,family="gaussian"),
   "seasonlength16"=glm(brkptx~seasonlength16,brkpts_con,family="gaussian"),
   "omax"=glm(brkptx~max,brkpts_con,family="gaussian"),
-  "o*lat"=glm(brkptx~lat*oce,brkpts_con,family="gaussian"),
-  "o*mean"=glm(brkptx~mean*oce,brkpts_con,family="gaussian"),
-  "o*s.mean"=glm(brkptx~s.mean*oce,brkpts_con,family="gaussian"),
-  "o*q.mean"=glm(brkptx~q.mean*oce,brkpts_con,family="gaussian"),
-  "o*t.mean"=glm(brkptx~t.mean*oce,brkpts_con,family="gaussian"),
-  "o*seasonlength10"=glm(brkptx~seasonlength10*oce,brkpts_con,family="gaussian"),
-  "seasonlength16"=glm(brkptx~seasonlength16*oce,brkpts_con,family="gaussian"),
-  "o*max"=glm(brkptx~max*oce,brkpts_con,family="gaussian")
+  "spring"=glm(brkptx~spring,brkpts_con,family="gaussian"),
+    "spring2"=glm(brkptx~spring2,brkpts_con,family="gaussian")
   )
    
    aictab(mods.brk_con)
-   summary(lm(brkptx~s.mean,brkpts_con))
+   summary(lm(brkptx~max,brkpts_con))
    
-   ggplot(brkpts_con,aes(x=s.mean,y=brkptx))+
-      geom_point(aes(color=oce),size=3)+theme_classic()+geom_smooth(method="lm",se=F,color="black")+ylab(label="Thermal Optima (°C)")+
+   ggplot(brkpts_con,aes(x=max,y=brkptx))+
+      geom_point(aes(color=oce),size=3)+theme_classic()+ylab(label="Thermal Optima (°C)")+
       scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
       scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean",
       values=c('red','blue'))+theme(text=element_text(family="arial",size=22))+
-      xlab('Summer Mean Temperature (°C)')
+      xlab('Summer Maximum (°C)')+scale_x_continuous(limits=c(20,34),breaks=seq(20,34,by=2)) 
 ```
 
 Here, we see mean site temperature again as the best predictor, and that the pattern of decreasing thermal optima with mean site temperature is preserved so that warmer sites perform best at lower temperatures. However, this pattern was not signficant (P>0.05)
@@ -855,9 +894,9 @@ One reason we are checking quadratic is that sometimes the optima isn't the opti
       geom_smooth(method='glm',formula=y~poly(x,2),se=F,aes(color=Population,size=Population))+theme_classic()+
       scale_x_continuous(breaks=c(16,20,24,26,28,30))+
       scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
-      scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
+      scale_linetype_manual(values=c(1,1,1,1,1,1,4,4),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
       scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
-      theme_classic()+labs(y="Log Rate of Consumption",x="Temperature (C)")+theme(text=element_text(family="arial",size=22))
+      theme_classic()+labs(y="Consumption rate (log(oysters/day))",x="Temperature (°C)")+theme(text=element_text(family="arial",size=22))
    
    
    
@@ -867,7 +906,7 @@ One reason we are checking quadratic is that sometimes the optima isn't the opti
       scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
       scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
       scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
-      theme_classic()+labs(y="Log Rate of Consumption",x="Temperature (?C)")+facet_wrap(Population~.)+geom_point()+theme(legend.position = "none")+theme(text=element_text(family="arial",size=22))
+      theme_classic()+labs(y="Log Rate of Consumption",x="Temperature (°C)")+facet_wrap(Population~.)+geom_point()+theme(legend.position = "none")+theme(text=element_text(family="arial",size=22))
 ```
 
 ## Y Breakpoint, maximal trait performance, quadratic
@@ -876,14 +915,6 @@ One reason we are checking quadratic is that sometimes the optima isn't the opti
    
    mods.brkyq<-list(
     "nullo"=glm(brkptyq~1,brkpts_con,family="gaussian"),
-  "lato"=glm(brkptyq~lat+oce,brkpts_con,family="gaussian"),
-  "meano"=glm(brkptyq~mean+oce,brkpts_con,family="gaussian"),
-  "s.meano"=glm(brkptyq~s.mean+oce,brkpts_con,family="gaussian"),
-  "q.meano"=glm(brkptyq~q.mean+oce,brkpts_con,family="gaussian"),
-  "t.meano"=glm(brkptyq~t.mean+oce,brkpts_con,family="gaussian"),
-  "seasonlengtho10"=glm(brkptyq~seasonlength10+oce,brkpts_con,family="gaussian"),
-  "seasonlengtho16"=glm(brkptyq~seasonlength16+oce,brkpts_con,family="gaussian"),
-  "maxo"=glm(brkptyq~max+oce,brkpts_con,family="gaussian"),
   "lat"=glm(brkptyq~lat,brkpts_con,family="gaussian"),
   "mean"=glm(brkptyq~mean,brkpts_con,family="gaussian"),
   "s.mean"=glm(brkptyq~s.mean,brkpts_con,family="gaussian"),
@@ -892,19 +923,14 @@ One reason we are checking quadratic is that sometimes the optima isn't the opti
   "seasonlength10"=glm(brkptyq~seasonlength10,brkpts_con,family="gaussian"),
   "seasonlength16"=glm(brkptyq~seasonlength16,brkpts_con,family="gaussian"),
   "omax"=glm(brkptyq~max,brkpts_con,family="gaussian"),
-  "o*lat"=glm(brkptyq~lat*oce,brkpts_con,family="gaussian"),
-  "o*mean"=glm(brkptyq~mean*oce,brkpts_con,family="gaussian"),
-  "o*s.mean"=glm(brkptyq~s.mean*oce,brkpts_con,family="gaussian"),
-  "o*q.mean"=glm(brkptyq~q.mean*oce,brkpts_con,family="gaussian"),
-  "o*t.mean"=glm(brkptyq~t.mean*oce,brkpts_con,family="gaussian"),
-  "o*seasonlength10"=glm(brkptyq~seasonlength10*oce,brkpts_con,family="gaussian"),
-  "seasonlength16"=glm(brkptyq~seasonlength16*oce,brkpts_con,family="gaussian"),
-  "o*max"=glm(brkptyq~max*oce,brkpts_con,family="gaussian")
+  "spring"=glm(brkptyq~spring,brkpts_con,family="gaussian"),
+  "spring2"=glm(brkptyq~spring2,brkpts_con,family="gaussian")
+
   )
    
    aictab(mods.brkyq)
    
-   brkptxmq<-lm(brkptyq~lat,brkpts_con)
+   brkptxmq<-lm(brkptyq~max,brkpts_con)
    summary(brkptxmq)
    
    ggplot(brkpts_con,aes(x=lat,y=brkptyq))+
@@ -925,14 +951,6 @@ Using quadratic, there is no significant relationship between environment (mean 
    
    mods.brkxq<-list(
    "nullo"=glm(brkptxq~1,brkpts_con,family="gaussian"),
-  "lato"=glm(brkptxq~lat+oce,brkpts_con,family="gaussian"),
-  "meano"=glm(brkptxq~mean+oce,brkpts_con,family="gaussian"),
-  "s.meano"=glm(brkptxq~s.mean+oce,brkpts_con,family="gaussian"),
-  "q.meano"=glm(brkptxq~q.mean+oce,brkpts_con,family="gaussian"),
-  "t.meano"=glm(brkptxq~t.mean+oce,brkpts_con,family="gaussian"),
-  "seasonlengtho10"=glm(brkptxq~seasonlength10+oce,brkpts_con,family="gaussian"),
-  "seasonlengtho16"=glm(brkptxq~seasonlength16+oce,brkpts_con,family="gaussian"),
-  "maxo"=glm(brkptxq~max+oce,brkpts_con,family="gaussian"),
   "lat"=glm(brkptxq~lat,brkpts_con,family="gaussian"),
   "mean"=glm(brkptxq~mean,brkpts_con,family="gaussian"),
   "s.mean"=glm(brkptxq~s.mean,brkpts_con,family="gaussian"),
@@ -941,19 +959,14 @@ Using quadratic, there is no significant relationship between environment (mean 
   "seasonlength10"=glm(brkptxq~seasonlength10,brkpts_con,family="gaussian"),
   "seasonlength16"=glm(brkptxq~seasonlength16,brkpts_con,family="gaussian"),
   "omax"=glm(brkptxq~max,brkpts_con,family="gaussian"),
-  "o*lat"=glm(brkptxq~lat*oce,brkpts_con,family="gaussian"),
-  "o*mean"=glm(brkptxq~mean*oce,brkpts_con,family="gaussian"),
-  "o*s.mean"=glm(brkptxq~s.mean*oce,brkpts_con,family="gaussian"),
-  "o*q.mean"=glm(brkptxq~q.mean*oce,brkpts_con,family="gaussian"),
-  "o*t.mean"=glm(brkptxq~t.mean*oce,brkpts_con,family="gaussian"),
-  "o*seasonlength10"=glm(brkptxq~seasonlength10*oce,brkpts_con,family="gaussian"),
-  "seasonlength16"=glm(brkptxq~seasonlength16*oce,brkpts_con,family="gaussian"),
-  "o*max"=glm(brkptxq~max*oce,brkpts_con,family="gaussian")
+  "spring"=glm(brkptxq~spring,brkpts_con,family="gaussian"),
+  "spring1"=glm(brkptxq~spring2,brkpts_con,family="gaussian")
   )
+ 
    
    aictab(mods.brkxq)
    
-   brkptxmq<-lm(brkptxq~seasonlength10,brkpts_con)
+   brkptxmq<-lm(brkptxq~spring2,brkpts_con)
    summary(brkptxmq)
    
    ggplot(brkpts_con,aes(x=seasonlength10,y=brkptxq))+

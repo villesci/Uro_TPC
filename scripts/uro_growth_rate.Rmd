@@ -9,7 +9,7 @@ output:
 ---
 
 
-# The Study - read first
+# The Study - read first 
 
 For this part of the study, we measured growth rates of juvenile Urosalpinx snails. We measured snail length using ImageJ within two days of hatching, and grew them in tea strainers separated by population for 24 days in a common garden experiment. Nine replicates per population were distributed in six temperatures, with three groups of three subreplicates in each temperature/population treatment. Snails were given food ad libitum. The end length was recorded using digital calipers after 24 days, and we subtracted the starting length from the beginning length to get the growth rate (over 24 days; see data exploration for reasoning). From this growth data, we can create thermal performance curves (TPCs) for each population to show the growth response of Urosaplinx populations to a range of laboratory temperatures.
 
@@ -309,6 +309,28 @@ temp$date<-as.Date(temp$rdate)
 
 temp$site<-factor(temp$site, levels=c("gbj","wh","oy","bf","fb","GCSK","nah15","hmi2"))
 #"Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"
+
+#egg lay dates
+#egg laying mean
+lay_sk<-mean((filter(gcsk,rdate>"2018-03-01 00:00:00" & rdate< "2018-03-30 00:00:00"))$WTMP)
+lay_fb<-mean((filter(fb,rdate>"2018-03-01 00:00:00" & rdate< "2018-03-30 00:00:00"))$WTMP)
+lay_bf<-mean((filter(bf,rdate>"2018-03-15 00:00:00" & rdate< "2018-04-15 00:00:00"))$WTMP)
+lay_oy<-mean((filter(oy,rdate>"2018-05-01 00:00:00" & rdate< "2018-05-30 00:00:00"))$WTMP)
+lay_wh<-mean((filter(wh,rdate>"2018-05-15 00:00:00" & rdate< "2018-06-15 00:00:00"))$WTMP)
+lay_gb<-mean((filter(gbj,rdate>"2018-06-01 00:00:00" & rdate< "2018-06-30 00:00:00"))$WTMP)
+lay_hm<-mean((filter(hmi2,rdate>"2018-04-15 00:00:00" & rdate< "2018-05-15 00:00:00"))$WTMP)#inat
+lay_wp<-mean((filter(nah1516,rdate>"2018-04-15 00:00:00" & rdate< "2018-05-15 00:00:00"))$WTMP)#ruesink
+#max
+lay_sk2<-mean((filter(gcsk,rdate>"2018-03-01 00:00:00" & rdate< "2018-05-30 00:00:00"))$WTMP)
+lay_fb2<-mean((filter(fb,rdate>"2018-03-01 00:00:00" & rdate< "2018-05-30 00:00:00"))$WTMP)
+lay_bf2<-mean((filter(bf,rdate>"2018-03-15 00:00:00" & rdate< "2018-05-30 00:00:00"))$WTMP)
+lay_oy2<-mean((filter(oy,rdate>"2018-05-01 00:00:00" & rdate< "2018-07-30 00:00:00"))$WTMP)
+lay_wh2<-mean((filter(wh,rdate>"2018-07-01 00:00:00" & rdate< "2018-08-31 00:00:00"))$WTMP)
+lay_gb2<-mean((filter(gbj,rdate>"2018-07-01 00:00:00" & rdate< "2018-08-31 00:00:00"))$WTMP)
+lay_hm2<-mean((filter(hmi2,rdate>"2018-06-1 00:00:00" & rdate< "2018-07-15 00:00:00"))$WTMP)#inat
+lay_wp2<-mean((filter(nah1516,rdate>"2018-06-1 00:00:00" & rdate< "2018-07-15 00:00:00"))$WTMP)#ruesink
+
+
 ```
 
 We had to clean parts of the data to prepare it for analysis. The first issue we had to resolve was the extreme weight and caliper length outliers, which was clearly due to a misplaced decimal or missing 0 during data entry (these data points were off by a factor of 10 from "correct" data). In the silenced part of the markdown, this had to be corrected 5/432 times. 
@@ -351,7 +373,23 @@ y<-cbind(survival$alive,survival$dead)
 
 summary(aov(data=survival,y~site+temp))
 
+predictme<-(glm(y~temp,survival,family=binomial))
+predict(predictme,data.frame(temp=30),type="response")
 summary(glm(y~site+temp,survival,family=binomial))
+
+
+#mean vs. season length.
+summary(lm(seasonlength10~mean,q,family='gaussian'))
+ggplot(q,aes(x=seasonlength10,y=mean))+geom_point()
+chart.Correlation(q[,c(2:8)],histogram=TRUE)
+
+chart.Correlation(brkpts[,c(4:8,14,18:21)],histogram=TRUE,method='pearson')
+peras<-brkpts[,c(4:8,14,18:21)]
+library(ppcor)
+
+cor(peras,method='pearson')
+
+
 ```
 
 Temperature does have an effect, with increasing survivorship with increasing common garden temperature. As for sites, there may be some differences, but we can't tell this way. We will have to use environmental data as a proxy.
@@ -487,7 +525,29 @@ We extracted temperature data from each site. With this data, we calculated diff
 We also used latitude as a predictor (not shown in table below)
 ```{r,include=T,echo=F,warning=F}
 #plot of site temperatures
-ggplot(data=temp,aes(x=date,y=WTMP,color=site))+scale_color_viridis_d(name="Site",labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),option="D")+theme_classic()+geom_vline(xintercept = 152)+geom_vline(xintercept = 273)+ylab("SST (°C)")+xlab("")+scale_fill_discrete(name="Site",labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"))+scale_x_date(date_labels = "%b")+theme(text=element_text(family="sanserif",size=14))+stat_summary(geom="line",fun.y=base::mean,size=2)+geom_point(alpha=0.0002,color="black",fill="white")+guides(color=guide_legend(override.aes=list(fill=NA)))
+#highlight regions of development
+dev_dates<-read.csv(here::here('data/dev_dates.csv'))
+
+dev_dates$xmin<-as.Date(dev_dates$xmin,format="%Y-%m-%d")
+dev_dates$xmax<-as.Date(dev_dates$xmax,format="%Y-%m-%d")
+dev_dates$ymin<--Inf
+dev_dates$ymax<-Inf
+
+dev_dates<-filter(dev_dates,site==c("Great Bay, NH","Skidaway, GA"))
+
+
+ggplot(data=temp,aes(x=date,y=WTMP,color=site))+scale_fill_viridis_d(name="Site",labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),option="D")+scale_color_viridis_d(name="Site",labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),option="D")+theme_classic()+geom_vline(xintercept = 152)+geom_vline(xintercept = 273)+ylab("SST (°C)")+xlab("")+scale_x_date(date_labels = "%b")+theme(text=element_text(family="sanserif",size=14))+stat_summary(geom="line",fun.y=base::mean,size=2)+guides(color=guide_legend(override.aes=list(fill=NA)))
+
+#north-south  development mean
+ggplot(data=temp,aes(x=date,y=WTMP,color=site))+geom_rect(data=data_s,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax),fill=("grey"),inherit.aes=F)+geom_rect(data=dev_dates,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax,fill=site),alpha=0.2,inherit.aes=F)+scale_fill_manual(name="Site",labels=c("Great Bay, NH","Skidaway, GA"),values=c("yellow","blue"))+scale_color_viridis_d(name="Site",labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),option="D")+theme_classic()+geom_vline(xintercept = 152)+geom_vline(xintercept = 273)+ylab("SST (°C)")+xlab("")+scale_x_date(date_labels = "%b")+theme(text=element_text(family="sanserif",size=14))+stat_summary(geom="line",fun.y=base::mean,size=2)+guides(color=guide_legend(override.aes=list(fill=NA)))+
+  geom_segment(aes(y=20,yend=20,x=as.Date("2018-03-01",format="%Y-%m-%d")),xend=as.Date("2018-05-30",format="%Y-%m-%d"),size=2,color="black")+geom_segment(aes(y=22.7,yend=22.7,x=as.Date("2018-07-01",format="%Y-%m-%d")),xend=as.Date("2018-08-31",format="%Y-%m-%d"),size=2,color="black")
+
+#season length
+gb_length<-gbj%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>10)
+sk_length<-gcsk%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>10)
+
+data_s<-data.frame(xmin=as.Date("2018-01-01",format="%Y-%m-%d"),xmax=as.Date("2018-12-31",format="%Y-%m-%d"),ymin=-Inf,ymax=10)
+ggplot(data=temp,aes(x=date,y=WTMP,color=site))+scale_fill_viridis_d(name="Site",labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),option="D")+scale_color_viridis_d(name="Site",labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),option="D")+theme_classic()+geom_vline(xintercept = 152)+geom_vline(xintercept = 273)+ylab("SST (°C)")+xlab("")+scale_x_date(date_labels = "%b")+theme(text=element_text(family="sanserif",size=14))+stat_summary(geom="line",fun.y=base::mean,size=2)+guides(color=guide_legend(override.aes=list(fill=NA)))+geom_rect(data=data_s,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax),fill=("grey"),alpha=0.85,inherit.aes=F)
   
 
 
@@ -780,8 +840,8 @@ growth.alive$pop<-factor(growth.alive$pop,levels=c("Great Bay","Woods Hole","Oys
 
 
 ##unified breakpoints
-ggplot(all.length.pred,aes(x=temp,y=cal.length))+geom_line(aes(group=population,x=temp,y=cal.length,color=population,linetype=population,size=population))+
-  ylab("Shell Length (mm)")+xlab("Common Garden Temperature (°C)")+theme_classic()+
+ggplot(all.length.pred,aes(x=temp,y=cal.length))+geom_line(aes(group=population,x=temp,y=cal.length,color=population,linetype=population,size=population),size=1.5)+
+  ylab("Growth Rate (mm)")+xlab("Common Garden Temperature (°C)")+theme_classic()+
   scale_x_continuous(breaks=c(16,20,24,26,28,30))+
   scale_linetype_manual(values=c(1,1,1,1,1,1,4,4),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
   scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
@@ -801,12 +861,12 @@ all.length.pred<-all.length.pred%>%
   mutate(pop = fct_relevel(pop, 
             "Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"))
 
-ggplot()+geom_line(data=all.length.pred,aes(group=pop,x=temp,y=cal.length,color=pop,linetype=pop,size=pop))+
-  ylab("Shell Length (mm)")+xlab("Common Garden Temperature (°C)")+theme_classic()+
+ggplot()+geom_line(data=all.length.pred,aes(group=pop,x=temp,y=cal.length,color=pop,linetype=pop,size=pop),size=1.5)+
+  ylab("Shell Growth (mm)")+xlab("Temperature (°C)")+theme_classic()+
   scale_x_continuous(breaks=c(16,20,24,26,28,30))+
-  scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="pop")+
-  scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="pop")+
-  scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="pop")+theme(text=element_text(family="arial",size=22))+geom_point(data=growth.alive,aes(x=temp,y=cal.length,group=pop))+facet_wrap(pop~.)
+  scale_linetype_manual(values=c(1,1,1,1,1,1,4,4),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
+  scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
+  scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+theme(text=element_text(family="arial",size=22),legend.position = "none")+geom_point(data=growth.alive,aes(x=temp,y=cal.length,group=pop))+facet_wrap(pop~.)
 
 
 #for figure
@@ -1067,7 +1127,56 @@ brkpts$seasonlength10<-as.numeric(brkpts$seasonlength10)
 brkpts$seasonlength12<-as.numeric(brkpts$seasonlength12)
 brkpts$pop<-as.factor(brkpts$pop)
 
+brkpts$spring<-NA
+brkpts[8,20]<-lay_sk
+brkpts[7,20]<-lay_fb
+brkpts[6,20]<-lay_bf
+brkpts[5,20]<-lay_oy
+brkpts[4,20]<-lay_wh
+brkpts[3,20]<-lay_gb
+brkpts[2,20]<-lay_hm
+brkpts[1,20]<-lay_wp
+
+brkpts$spring2<-NA
+brkpts[8,21]<-lay_sk2
+brkpts[7,21]<-lay_fb2
+brkpts[6,21]<-lay_bf2
+brkpts[5,21]<-lay_oy2
+brkpts[4,21]<-lay_wh2
+brkpts[3,21]<-lay_gb2
+brkpts[2,21]<-lay_hm2
+brkpts[1,21]<-lay_wp2
+
 #write.csv(brkpts,"C:/Users/drewv/Documents/UMASS/data/length_brkpts.csv",row.names=F)
+
+
+#correlative environmental plots
+#mean
+mean_plot<-ggplot(brkpts,aes(x=lat,y=mean))+geom_point(aes(color=oce,shape=oce),size=3)+theme_classic()+theme(text=element_text(family="arial",size=22))+
+    scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
+    scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+ylab("Mean (°C)")+xlab("Latitude")+
+  scale_shape_manual(labels=c("Atlantic","Pacific"),name="Ocean",values=c(16,17))
+summary(lm(mean~lat,brkpts,fmaily="gaussian"))
+#season length
+season_plot<-ggplot(brkpts,aes(x=lat,y=seasonlength10))+geom_point(aes(color=oce,shape=oce),size=3)+theme_classic()+theme(text=element_text(family="arial",size=22))+
+    scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
+    scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+ylab("Season Length (10 °C)")+xlab("Latitude")+
+    scale_shape_manual(labels=c("Atlantic","Pacific"),name="Ocean",values=c(16,17))
+summary(lm(seasonlength10~lat,brkpts,fmaily="gaussian"))
+
+#maximal spawning period
+maxspawn_plot<-ggplot(brkpts,aes(x=lat,y=spring2))+geom_point(aes(color=oce,shape=oce),size=3)+theme_classic()+theme(text=element_text(family="arial",size=22))+
+    scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
+    scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+ylab("Maximum Spawning Period Mean (°C)")+xlab("Latitude")+
+    scale_shape_manual(labels=c("Atlantic","Pacific"),name="Ocean",values=c(16,17))
+summary(lm(spring2~lat,brkpts,fmaily="gaussian"))
+
+
+ggsave(filename="mean_plot.svg",width=5,height=4,dpi=300,units="in",device="svg")
+ggsave(filename="season_plot.svg",season_plot,width=5,height=4,dpi=300,units="in",device="svg")
+ggsave(filename="maxspawn_plot.svg",maxspawn_plot,width=5,height=4,dpi=300,units="in",device="svg")
+
+
 
 ```
 
@@ -1079,14 +1188,6 @@ The AIC table below tells us which environmental predictors best describe the re
 ##Maximal trait performance (y)
 mods.brk<-list(
   "nullo"=glm(brkpty~1,brkpts,family="gaussian"),
-  "lato"=glm(brkpty~lat+oce,brkpts,family="gaussian"),
-  "meano"=glm(brkpty~mean+oce,brkpts,family="gaussian"),
-  "s.meano"=glm(brkpty~s.mean+oce,brkpts,family="gaussian"),
-  "q.meano"=glm(brkpty~q.mean+oce,brkpts,family="gaussian"),
-  "t.meano"=glm(brkpty~t.mean+oce,brkpts,family="gaussian"),
-  "seasonlengtho10"=glm(brkpty~seasonlength10+oce,brkpts,family="gaussian"),
-  "seasonlengtho16"=glm(brkpty~seasonlength12+oce,brkpts,family="gaussian"),
-  "maxo"=glm(brkpty~max+oce,brkpts,family="gaussian"),
   "lat"=glm(brkpty~lat,brkpts,family="gaussian"),
   "mean"=glm(brkpty~mean,brkpts,family="gaussian"),
   "s.mean"=glm(brkpty~s.mean,brkpts,family="gaussian"),
@@ -1095,15 +1196,10 @@ mods.brk<-list(
   "seasonlength10"=glm(brkpty~seasonlength10,brkpts,family="gaussian"),
   "seasonlength12"=glm(brkpty~seasonlength12,brkpts,family="gaussian"),
   "omax"=glm(brkpty~max,brkpts,family="gaussian"),
-  "o*lat"=glm(brkpty~lat*oce,brkpts,family="gaussian"),
-  "o*mean"=glm(brkpty~mean*oce,brkpts,family="gaussian"),
-  "o*s.mean"=glm(brkpty~s.mean*oce,brkpts,family="gaussian"),
-  "o*q.mean"=glm(brkpty~q.mean*oce,brkpts,family="gaussian"),
-  "o*t.mean"=glm(brkpty~t.mean*oce,brkpts,family="gaussian"),
-  "o*seasonlength10"=glm(brkpty~seasonlength10*oce,brkpts,family="gaussian"),
-  "seasonlength12"=glm(brkpty~seasonlength12*oce,brkpts,family="gaussian"),
-  "o*max"=glm(brkpty~max*oce,brkpts,family="gaussian")
-  )
+  "spring"=glm(brkpty~spring,brkpts,family="gaussian"),
+   "spring2"=glm(brkpty~spring2,brkpts,family="gaussian")
+  
+    )
 
 aictab(mods.brk)
 ```
@@ -1115,7 +1211,7 @@ Here, it appears that the season length as calculated at 10C without ocean is th
 ```{r,include=T,warning=F,echo=F}
 ##Maximal trait performance (y)
 
-brkptym<-(lm(brkpty~seasonlength12,brkpts))
+brkptym<-(lm(brkpty~seasonlength10,brkpts))
 summary(brkptym) 
 
 
@@ -1140,11 +1236,27 @@ ggplot(brkpts,aes(x=seasonlength10,y=brkpty))+
   geom_point(size=3,aes(color=oce,shape=oce))+theme_classic()+
   ylab("Maximal Growth (mm)")+
   xlab("Season Length (days), 10°C")+
+  
+  theme(text=element_text(family="arial",size=22))+
+    scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
+    scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
+  geom_smooth(method='lm',se=F,color="black")+scale_shape_manual(labels=c("Atlantic","Pacific"),name="Ocean",values=c(16,17))
+
+##mean for comparison
+
+brkptym3<-(lm(brkpty~mean,brkpts))
+summary(brkptym3) 
+
+ggplot(brkpts,aes(x=seasonlength10,y=brkpty))+
+  geom_point(size=3,aes(color=oce,shape=oce))+theme_classic()+
+  ylab("Maximal Growth (mm)")+
+  xlab("Season Length (days), 10°C")+
   theme(text=element_text(family="arial",size=22))+
     scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
     scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
   geom_smooth(method='lm',se=F,color="black")+scale_shape_manual(labels=c("Atlantic","Pacific"),name="Ocean",values=c(16,17))
 ```
+
 
 When we look at season length when calculated at 10C, we see a significant relationship between maximal trait performance and season length. This trend becomes less signficant when we calculate it at 12.5C, mostly because our Pacific sites "ungroup" from the Atlantic sites. At 10C season length, we could be seeing possible countergradient variation! The one weird point in the Atlantic is Woods Hole. Anecdotal, I could attribute this to the very hot local conditions in the estuary, but can't say for sure. 
 
@@ -1156,16 +1268,9 @@ But what about the thermal optima?
 
 
 
+
 mods.brkx<-list(
   "nullo"=glm(brkptx~1,brkpts,family="gaussian"),
-  "lato"=glm(brkptx~lat+oce,brkpts,family="gaussian"),
-  "meano"=glm(brkptx~mean+oce,brkpts,family="gaussian"),
-  "s.meano"=glm(brkptx~s.mean+oce,brkpts,family="gaussian"),
-  "q.meano"=glm(brkptx~q.mean+oce,brkpts,family="gaussian"),
-  "t.meano"=glm(brkptx~t.mean+oce,brkpts,family="gaussian"),
-  "seasonlengtho10"=glm(brkptx~seasonlength10+oce,brkpts,family="gaussian"),
-  "seasonlengtho16"=glm(brkptx~seasonlength12+oce,brkpts,family="gaussian"),
-  "maxo"=glm(brkptx~max+oce,brkpts,family="gaussian"),
   "lat"=glm(brkptx~lat,brkpts,family="gaussian"),
   "mean"=glm(brkptx~mean,brkpts,family="gaussian"),
   "s.mean"=glm(brkptx~s.mean,brkpts,family="gaussian"),
@@ -1174,32 +1279,29 @@ mods.brkx<-list(
   "seasonlength10"=glm(brkptx~seasonlength10,brkpts,family="gaussian"),
   "seasonlength12"=glm(brkptx~seasonlength12,brkpts,family="gaussian"),
   "omax"=glm(brkptx~max,brkpts,family="gaussian"),
-  "o*lat"=glm(brkptx~lat*oce,brkpts,family="gaussian"),
-  "o*mean"=glm(brkptx~mean*oce,brkpts,family="gaussian"),
-  "o*s.mean"=glm(brkptx~s.mean*oce,brkpts,family="gaussian"),
-  "o*q.mean"=glm(brkptx~q.mean*oce,brkpts,family="gaussian"),
-  "o*t.mean"=glm(brkptx~t.mean*oce,brkpts,family="gaussian"),
-  "o*seasonlength10"=glm(brkptx~seasonlength10*oce,brkpts,family="gaussian"),
-  "seasonlength12"=glm(brkptx~seasonlength12*oce,brkpts,family="gaussian"),
-  "o*max"=glm(brkptx~max*oce,brkpts,family="gaussian")
+  "spring"=glm(brkptx~spring,brkpts,family="gaussian"),
+  "spring2"=glm(brkptx~spring2,brkpts,family="gaussian")
   )
 
 aictab(mods.brkx)
 
-brkptym<-lm(brkptx~seasonlength10,brkpts)
+brkptym<-lm(brkptx~spring2,brkpts)
 summary(brkptym)
 
-ggplot(brkpts,aes(x=seasonlength10,y=brkptx))+
+ggplot(brkpts,aes(x=spring2,y=brkptx))+
   geom_point(size=3,aes(color=oce,shape=oce))+geom_smooth(method="lm",se=F,color="black")+theme_classic()+
   ylab("Thermal Optima (°C)")+
-  xlab("Season Length (days), 10°C")+
+  xlab("Maximum Spawning Period Mean (°C)")+
   theme(text=element_text(family="arial",size=22))+
   scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
   scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
   scale_shape_manual(labels=c("Atlantic","Pacific"),name="Ocean",values=c(16,17))+scale_y_continuous(breaks=seq(20,30,2))+
-  expand_limits(y=c(20,30))
+  expand_limits(y=c(20,30))+scale_x_continuous(limits=c(14,26),breaks=seq(14,26,by=2))
                                                                                                    
   
+#is mean multicollinear with seasonlength?
+testm<-lm(brkptx~seasonlength10+mean,brkpts)
+car::vif(testm)
 
 ```
 
@@ -1334,14 +1436,14 @@ brkpts[2,17]<-cfhm[1]+cfhm[2]*brkpts[2,16]+cfhm[3]*(brkpts[2,16]^2)
 ggplot(growth.alive,aes(y=cal.length,x=temp,group=pop,linetype=pop))+geom_smooth(method='lm',formula=y~poly(x,2),se=F,aes(color=pop,size=pop))+
 theme_classic()+theme(legend.position = "none")+labs(y="Shell Length (mm)",x="Temperature (°C)")+scale_x_continuous(breaks=c(16,20,24,26,28,30))+
   scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="population")+
-  scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="population")+
+  scale_linetype_manual(values=c(1,1,1,1,1,1,4,4),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="population")+
   scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+facet_wrap(pop~.)+geom_point()+theme(text=element_text(family="arial",size=22))
 
 ggplot(growth.alive,aes(y=cal.length,x=temp,group=pop,linetype=pop))+geom_smooth(method='lm',formula=y~poly(x,2),se=F,aes(color=pop,size=pop))+
-theme_classic()+labs(y="Shell Length (mm)",x="Temperature (°C)")+scale_x_continuous(breaks=c(16,20,24,26,28,30))+
-  scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
-  scale_linetype_manual(values=c(1,1,1,1,1,1,3,3),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+
-  scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"),name="Population")+theme(text=element_text(family="arial",size=22))
+theme_classic()+labs(y="Growth Rate (mm)",x="Temperature (°C)")+scale_x_continuous(breaks=c(16,20,24,26,28,30))+
+  scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
+  scale_linetype_manual(values=c(1,1,1,1,1,1,4,4),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
+  scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+theme(text=element_text(family="arial",size=22))
 
 
 
@@ -1367,15 +1469,7 @@ ggplot(all.length.pred,aes(x=temp,y=cal.length),group=pop)+geom_line(aes(group=p
 
 mods.brkyq<-list(
   "nullo"=glm(brkptyq~1,brkpts,family="gaussian"),
-  "lato"=glm(brkptyq~lat+oce,brkpts,family="gaussian"),
-  "meano"=glm(brkptyq~mean+oce,brkpts,family="gaussian"),
-  "s.meano"=glm(brkptyq~s.mean+oce,brkpts,family="gaussian"),
-  "q.meano"=glm(brkptyq~q.mean+oce,brkpts,family="gaussian"),
-  "t.meano"=glm(brkptyq~t.mean+oce,brkpts,family="gaussian"),
-  "seasonlengtho10"=glm(brkptyq~seasonlength10+oce,brkpts,family="gaussian"),
-  "seasonlengtho16"=glm(brkptyq~seasonlength12+oce,brkpts,family="gaussian"),
-  "maxo"=glm(brkptyq~max+oce,brkpts,family="gaussian"),
-  "lat"=glm(brkptyq~lat,brkpts,family="gaussian"),
+   "lat"=glm(brkptyq~lat,brkpts,family="gaussian"),
   "mean"=glm(brkptyq~mean,brkpts,family="gaussian"),
   "s.mean"=glm(brkptyq~s.mean,brkpts,family="gaussian"),
   "q.mean"=glm(brkptyq~q.mean,brkpts,family="gaussian"),
@@ -1383,23 +1477,18 @@ mods.brkyq<-list(
   "seasonlength10"=glm(brkptyq~seasonlength10,brkpts,family="gaussian"),
   "seasonlength12"=glm(brkptyq~seasonlength12,brkpts,family="gaussian"),
   "omax"=glm(brkptyq~max,brkpts,family="gaussian"),
-  "o*lat"=glm(brkptyq~lat*oce,brkpts,family="gaussian"),
-  "o*mean"=glm(brkptyq~mean*oce,brkpts,family="gaussian"),
-  "o*s.mean"=glm(brkptyq~s.mean*oce,brkpts,family="gaussian"),
-  "o*q.mean"=glm(brkptyq~q.mean*oce,brkpts,family="gaussian"),
-  "o*t.mean"=glm(brkptyq~t.mean*oce,brkpts,family="gaussian"),
-  "o*seasonlength10"=glm(brkptyq~seasonlength10*oce,brkpts,family="gaussian"),
-  "seasonlength12"=glm(brkptyq~seasonlength12*oce,brkpts,family="gaussian"),
-  "o*max"=glm(brkptyq~max*oce,brkpts,family="gaussian")
+  "spring"=glm(brkptyq~spring,brkpts,family="gaussian"),
+  "spring2"=glm(brkptyq~spring2,brkpts,family="gaussian")
+
   )
 
 aictab(mods.brkyq)
 #mean is the most highly supported model this time. 
 
-brkptxmq<-lm(brkptyq~seasonlength10,brkpts)
+brkptxmq<-lm(brkptyq~spring,brkpts)
 summary(brkptxmq)
 
-ggplot(brkpts,aes(x=seasonlength10,y=brkptyq))+
+ggplot(brkpts,aes(x=spring,y=brkptyq))+
   geom_point(size=3,aes(color=oce))+geom_smooth(method="lm",se=F,color="black")+theme_classic()+
   ylab("Thermal Optima")+
   xlab("Season Length (days), 10C")+
@@ -1412,15 +1501,7 @@ This is not significant in the slightest. part of the issue is that the quadrati
 ### Maximal trait performance (Y Breakpoint), Quadratic
 ```{r,echo=F,warning=F}
 mods.brkxq<-list(
-  "nullo"=glm(brkptxq~1,brkpts,family="gaussian"),
-  "lato"=glm(brkptxq~lat+oce,brkpts,family="gaussian"),
-  "meano"=glm(brkptxq~mean+oce,brkpts,family="gaussian"),
-  "s.meano"=glm(brkptxq~s.mean+oce,brkpts,family="gaussian"),
-  "q.meano"=glm(brkptxq~q.mean+oce,brkpts,family="gaussian"),
-  "t.meano"=glm(brkptxq~t.mean+oce,brkpts,family="gaussian"),
-  "seasonlengtho10"=glm(brkptxq~seasonlength10+oce,brkpts,family="gaussian"),
-  "seasonlengtho16"=glm(brkptxq~seasonlength12+oce,brkpts,family="gaussian"),
-  "maxo"=glm(brkptxq~max+oce,brkpts,family="gaussian"),
+  "null"=glm(brkptxq~1,brkpts,family="gaussian"),
   "lat"=glm(brkptxq~lat,brkpts,family="gaussian"),
   "mean"=glm(brkptxq~mean,brkpts,family="gaussian"),
   "s.mean"=glm(brkptxq~s.mean,brkpts,family="gaussian"),
@@ -1429,22 +1510,16 @@ mods.brkxq<-list(
   "seasonlength10"=glm(brkptxq~seasonlength10,brkpts,family="gaussian"),
   "seasonlength12"=glm(brkptxq~seasonlength12,brkpts,family="gaussian"),
   "omax"=glm(brkptxq~max,brkpts,family="gaussian"),
-  "o*lat"=glm(brkptxq~lat*oce,brkpts,family="gaussian"),
-  "o*mean"=glm(brkptxq~mean*oce,brkpts,family="gaussian"),
-  "o*s.mean"=glm(brkptxq~s.mean*oce,brkpts,family="gaussian"),
-  "o*q.mean"=glm(brkptxq~q.mean*oce,brkpts,family="gaussian"),
-  "o*t.mean"=glm(brkptxq~t.mean*oce,brkpts,family="gaussian"),
-  "o*seasonlength10"=glm(brkptxq~seasonlength10*oce,brkpts,family="gaussian"),
-  "seasonlength12"=glm(brkptxq~seasonlength12*oce,brkpts,family="gaussian"),
-  "o*max"=glm(brkptxq~max*oce,brkpts,family="gaussian")
+  "spring"=glm(brkptxq~spring,brkpts,family="gaussian"),
+  "spring2"=glm(brkptxq~spring2,brkpts,family="gaussian")
   )
 
 aictab(mods.brkxq)
 
-brkptxmq<-lm(brkptxq~seasonlength12,brkpts)
+brkptxmq<-lm(brkptxq~spring,brkpts)
 summary(brkptxmq)
 
-ggplot(brkpts,aes(x=seasonlength12,y=brkptxq))+
+ggplot(brkpts,aes(x=spring,y=brkptxq))+
   geom_point(size=3,aes(color=oce))+geom_smooth(method="lm",se=F,color="black")+theme_classic()+
   ylab("Maximal Growth rate (mm)")+
   xlab("Season Length (days,12C)")+
