@@ -1515,6 +1515,8 @@ ab<-ggplot() +
 
 # Plot those CI intervals
 
+These intervals are silenced in the code because they take a very long time to run; to reproduce the CI, unsilence the code below. To plot the CIs for the figure, I saved the CIs into a csv (also silenced), so that one can simply upload the CI file and create the plot from that csv. 
+
 ```{r}
 ####
 #extra_params_gb1 <- calc_params(fit_nlsLM2_gb1) %>%

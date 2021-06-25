@@ -167,7 +167,7 @@ growth.alive<-tidyr::drop_na(growth.alive)
 ##temperature data
 
 #gb
-gb<-read.csv(here::here("test_env/gb/GRBGBWQ.csv"))
+gb<-read.csv(here::here("data/test_env/gb/GRBGBWQ.csv"))
 gb<-gb[,c(3,7)]
 gb$rdate<-as.POSIXct(gb$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
 gb<-na.omit(gb)
@@ -181,10 +181,10 @@ gb<-rbind(gb14,gb15,gb16,gb18)
 gb$site<-"gb"
 
 #wh - P is 0.06 with this measurement, but more like 0.123 when we do it with the farther away source. 
-wh2019<-read.delim(here::here("test_env/wh/bzbm3h2019.txt"),sep = "", dec = ".")
-wh2018<-read.delim(here::here("test_env/wh/bzbm3h2018.txt"),sep = "", dec = ".")
-wh2017<-read.delim(here::here("test_env/wh/bzbm3h2017.txt"),sep = "", dec = ".")
-wh2016<-read.delim(here::here("test_env/wh/bzbm3h2016.txt"),sep = "", dec = ".")
+wh2019<-read.delim(here::here("data/test_env/wh/bzbm3h2019.txt"),sep = "", dec = ".")
+wh2018<-read.delim(here::here("data/test_env/wh/bzbm3h2018.txt"),sep = "", dec = ".")
+wh2017<-read.delim(here::here("data/test_env/wh/bzbm3h2017.txt"),sep = "", dec = ".")
+wh2016<-read.delim(here::here("data/test_env/wh/bzbm3h2016.txt"),sep = "", dec = ".")
 
 
 wh<-rbind(wh2019,wh2018,wh2017,wh2016)
@@ -203,7 +203,7 @@ wh<-wh[,2:4]
 
 
 #oy
-oy<-read.csv(here::here("test_env/oy/oy.csv"))
+oy<-read.csv(here::here("data/test_env/oy/oy.csv"))
 oy$site<-"oy"
 oy$DATE<-as.POSIXct(oy$DATE,tz="", "%d%b%Y")
 #time is not possible :(
@@ -215,10 +215,10 @@ oy<-oy%>%filter(rdate >= "2016-01-01" & rdate<="2019-12-31")
 oy<-na.omit(oy)
 
 #bf
-bf2019<-read.delim(here::here("test_env/bf/bftn7h2019.txt"),sep = "", dec = ".")
-bf2018<-read.delim(here::here("test_env/bf/bftn7h2018.txt"),sep = "", dec = ".")
-bf2017<-read.delim(here::here("test_env/bf/bftn7h2017.txt"),sep = "", dec = ".")
-bf2016<-read.delim(here::here("test_env/bf/bftn7h2016.txt"),sep = "", dec = ".")
+bf2019<-read.delim(here::here("data/test_env/bf/bftn7h2019.txt"),sep = "", dec = ".")
+bf2018<-read.delim(here::here("data/test_env/bf/bftn7h2018.txt"),sep = "", dec = ".")
+bf2017<-read.delim(here::here("data/test_env/bf/bftn7h2017.txt"),sep = "", dec = ".")
+bf2016<-read.delim(here::here("data/test_env/bf/bftn7h2016.txt"),sep = "", dec = ".")
 
 bf<-rbind(bf2019,bf2018,bf2017,bf2016)
 bf<-bf[,c(1:5,15)]
@@ -234,10 +234,10 @@ bf<-bf%>%filter(WTMP!="999.0")
 bf$WTMP<-as.numeric(bf$WTMP)
 
 #fb
-fb2019<-read.delim(here::here("test_env/fb/chts1h2019.txt"),sep = "", dec = ".")
-fb2018<-read.delim(here::here("test_env/fb/chts1h2018.txt"),sep = "", dec = ".")
-fb2017<-read.delim(here::here("test_env/fb/chts1h2017.txt"),sep = "", dec = ".")
-fb2016<-read.delim(here::here("test_env/fb/chts1h2016.txt"),sep = "", dec = ".")
+fb2019<-read.delim(here::here("data/test_env/fb/chts1h2019.txt"),sep = "", dec = ".")
+fb2018<-read.delim(here::here("data/test_env/fb/chts1h2018.txt"),sep = "", dec = ".")
+fb2017<-read.delim(here::here("data/test_env/fb/chts1h2017.txt"),sep = "", dec = ".")
+fb2016<-read.delim(here::here("data/test_env/fb/chts1h2016.txt"),sep = "", dec = ".")
 
 fb<-rbind(fb2019,fb2018,fb2017,fb2016)
 fb<-fb[,c(1:5,15)]
@@ -253,7 +253,7 @@ fb<-fb%>%filter(WTMP!="999.0")
 fb$WTMP<-as.numeric(fb$WTMP)
 
 #sk
-sk<-read.csv(here::here("test_env/sk/SAPDCWQ.csv"))
+sk<-read.csv(here::here("data/test_env/sk/SAPDCWQ.csv"))
 sk<-sk[,c(3,7)]
 
 sk$rdate<-as.POSIXct(sk$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
@@ -265,7 +265,7 @@ sk<-rbind(sk_15,sk_18)
 sk<-na.omit(sk)
 
 #wp
-wp<-read.csv(here::here("test_env/wp/wp.csv"))
+wp<-read.csv(here::here("data/test_env/wp/wp.csv"))
 wp$rdate<-as.POSIXct(wp$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
 wp$WTMP<-as.numeric(wp$WTMP)
 ggplot(wp,aes(x=rdate,y=WTMP))+geom_point()
@@ -280,7 +280,7 @@ wp<-rbind(nah1,nah2,nah3,nah4)
 
 #hm
 #2014
-wiyot2014<-read.csv(here::here("test_env/hm/wiyot2014.csv"),header=T)
+wiyot2014<-read.csv(here::here("data/test_env/hm/wiyot2014.csv"),header=T)
 wiyot2014<-wiyot2014%>%filter(str_detect(Sample..,"\\d"))
 wiyot2014<-wiyot2014%>%filter(!str_detect(Sample..,"Daylight"))
 wiyot2014<-wiyot2014%>%filter(!str_detect(Sample..,"Chlorophyll"))
@@ -296,7 +296,7 @@ wiyot2014<-wiyot2014[,c(2:4)]
 wiyot2014$WTMP<-as.numeric(wiyot2014$WTMP)
 
 #2013
-wiyot2013<-read.csv(here::here("test_env/hm/wiyot2013.csv"),header=T)
+wiyot2013<-read.csv(here::here("data/test_env/hm/wiyot2013.csv"),header=T)
 wiyot2013<-wiyot2013%>%filter(str_detect(sonde..3,"\\d"))
 wiyot2013<-wiyot2013%>%filter(!str_detect(sonde..3,"sonde"))
 wiyot2013<-wiyot2013%>%filter(!str_detect(sonde..3,"Daylight"))
@@ -313,7 +313,7 @@ wiyot2013<-wiyot2013[,c(2:3)]
 wiyot2013$site<-"hm"
 
 #2012
-wiyot2012<-read.csv(here::here("test_env/hm/wiyot2012.csv"),header=T)
+wiyot2012<-read.csv(here::here("data/test_env/hm/wiyot2012.csv"),header=T)
 wiyot2012<-wiyot2012%>%filter(str_detect(sonde..3,"\\d"))
 wiyot2012<-wiyot2012%>%filter(!str_detect(sonde..3,"sonde"))
 wiyot2012<-wiyot2012%>%filter(!str_detect(sonde..3,"Daylight"))
@@ -324,7 +324,7 @@ wiyot2012<-wiyot2012[,c(3,4)]
 wiyot2012$WTMP<-as.numeric(wiyot2012$WTMP)
 wiyot2012$site<-"hm"
 #2016
-wiyot2016<-read.csv(here::here("test_env/hm/wiyot2016.csv"),header=T)
+wiyot2016<-read.csv(here::here("data/test_env/hm/wiyot2016.csv"),header=T)
 wiyot2016<-wiyot2016%>%filter(str_detect(sonde..2,"\\d"))
 wiyot2016<-wiyot2016%>%filter(!str_detect(sonde..2,"Daylight"))
 wiyot2016<-wiyot2016%>%unite("DateTimeStamp",c(2:3))
