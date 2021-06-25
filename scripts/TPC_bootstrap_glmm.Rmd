@@ -1,0 +1,1901 @@
+---
+title: "boostrap_examples"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(datasets.load)
+library(dplyr)
+library(ggplot2)
+library(boot)
+library(car)
+library(rTPC)
+library(nls.multstart)
+library(broom)
+library(tidyverse)
+library(patchwork)
+library(minpack.lm)
+library(nlstools)
+library(extrafont)
+loadfonts(device = "win")
+
+```
+
+# What is this document?
+
+This R markdown file shows the statistical pathway we took to bootstrap model fits from rTPC (which are on the uro_growth_bin_rtpc_glmm.RMD file) and produce the confidence intervals for each model, which were also used to produce TPC plots for the manuscript. 
+
+# Models for all sites
+
+## Data read in
+
+```{r,include=F}
+growth.alive<-read.csv(here::here("data/growth.csv"))
+growth.alive<-na.omit(growth.alive)
+growth.alive<-data.frame("temp"=growth.alive$temp,"cal.length"=growth.alive$cal.length,"bin"=growth.alive$bin,"pop"=growth.alive$pop, "cal.length.start"=growth.alive$cal.length.start)
+growth.alive<-growth.alive%>%
+  mutate(pop = fct_relevel(pop, 
+            "Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"))
+
+```
+
+## Creation of model fits and plotting
+
+```{r,echo=F,warning=F}
+# fit  rezende model
+d_fit_all <- nest(growth.alive, data = c(temp, cal.length, cal.length.start,cal.length.start)) %>%
+  mutate(rezende = map(data, ~nls_multstart(cal.length~(1|cal.length.start)+rezende_2019(temp = temp, q10,a,b,c),
+                                            data = .x,
+                                            iter = c(3,3,3,3),
+                                            start_lower = get_start_vals(.x$temp, .x$cal.length, model_name = 'rezende_2019') - 1,
+                                            start_upper = get_start_vals(.x$temp, .x$cal.length, model_name = 'rezende_2019') + 1,
+                                            lower = get_lower_lims(.x$temp, .x$cal.length, model_name = 'rezende_2019'),
+                                            upper = get_upper_lims(.x$temp, .x$cal.length, model_name = 'rezende_2019'),
+                                            supp_errors = 'Y',
+                                            convergence_count = FALSE)))
+# create new list column of for high resolution data
+d_preds_all <- dplyr::mutate(d_fit_all, new_data = map(data, ~tibble(temp = seq(min(.x$temp), max(.x$temp), length.out = 100)))) %>%
+  # get rid of original data column
+  dplyr::select(., -data) %>%
+  # stack models into a single column, with an id column for model_name
+  pivot_longer(., names_to = 'model_name', values_to = 'fit', c(rezende)) %>%
+  # create new list column containing the predictions
+  # this uses both fit and new_data list columns
+  dplyr::mutate(preds = map2(fit, new_data, ~augment(.x, newdata = .y))) %>%
+  # select only the columns we want to keep
+  dplyr::select(bin, pop, bin, model_name, preds) %>%
+  # unlist the preds list column
+  unnest(preds)
+
+glimpse(d_preds_all)
+
+
+
+# plot data and predictions
+ggplot() +
+  geom_line(aes(temp, .fitted,group=bin,color=pop), d_preds_all) +
+  geom_point(aes(temp, cal.length), growth.alive, size = 2, alpha = 0.5) +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Growth cal.length',
+       title = 'Growth cal.length across temperatures')+facet_wrap(~pop)+ scale_x_continuous(breaks=c(16,20,24,26,28,30))
+
+```
+
+# Models for a singe curve
+
+## Read in data
+```{r,include=F}
+gb_t<-growth.alive%>%filter(pop=="Great Bay")
+gb_t<-gb_t%>%filter(bin==3)
+gb_t<-na.omit(gb_t)
+gb_t<-data.frame("temp"=gb_t$temp,"cal.length"=gb_t$cal.length,"bin"=gb_t$bin,"pop"=gb_t$pop,"cal.length.start"=gb_t$cal.length.start)
+
+```
+
+# Create model and plot
+
+```{r,warning=F,echo=F}
+
+d_fit <- nest(gb_t, data = c(temp, cal.length, cal.length.start)) %>%
+  mutate(rezende = map(data, ~nls_multstart(cal.length~(1|cal.length.start)+rezende_2019(temp = temp, q10,a,b,c),
+                                                     data = .x,
+                                                     iter = c(3,3,3,3),
+                                                     start_lower = get_start_vals(.x$temp, .x$cal.length, model_name = 'rezende_2019') - 1,
+                                                     start_upper = get_start_vals(.x$temp, .x$cal.length, model_name = 'rezende_2019') + 1,
+                                                     lower = get_lower_lims(.x$temp, .x$cal.length, model_name = 'rezende_2019'),
+                                                     upper = get_upper_lims(.x$temp, .x$cal.length, model_name = 'rezende_2019'),
+                                                     supp_errors = 'Y',
+                                                     convergence_count = FALSE)))
+         # create new list column of for high resolution data
+         d_preds <- dplyr::mutate(d_fit, new_data = map(data, ~tibble(temp = seq(min(.x$temp), max(.x$temp), length.out = 100)))) %>%
+           # get rid of original data column
+           dplyr::select(., -data) %>%
+           # stack models into a single column, with an id column for model_name
+           pivot_longer(., names_to = 'model_name', values_to = 'fit', c(rezende)) %>%
+           # create new list column containing the predictions
+           # this uses both fit and new_data list columns
+           dplyr::mutate(preds = map2(fit, new_data, ~augment(.x, newdata = .y))) %>%
+           # select only the columns we want to keep
+           dplyr::select(bin, pop, bin, model_name, preds) %>%
+           # unlist the preds list column
+           unnest(preds)
+         
+         glimpse(d_preds)
+       
+# plot data and predictions
+ggplot() +
+  geom_line(aes(temp, .fitted,group=bin), d_preds, col = 'blue') +
+  geom_point(aes(temp, cal.length), gb_t, size = 2, alpha = 0.5) +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Growth cal.length',
+       title = 'Growth cal.length across temperatures')+facet_wrap(~pop)
+
+```
+
+## Bootstrap to create CIs
+
+```{r,echo=F,warning=F}
+
+d_fit_boot <- nest(gb_t, data = c(temp, cal.length, cal.length.start)) %>%
+  mutate(rezende = map(data, ~nls_multstart(cal.length~(1|cal.length.start)+rezende_2019(temp = temp, q10,a,b,c),
+                                                     data = .x,
+                                                     iter = c(3,3,3,3),
+                                                     start_lower = get_start_vals(.x$temp, .x$cal.length, model_name = 'rezende_2019') - 1,
+                                                     start_upper = get_start_vals(.x$temp, .x$cal.length, model_name = 'rezende_2019') + 1,
+                                                     lower = get_lower_lims(.x$temp, .x$cal.length, model_name = 'rezende_2019'),
+                                                     upper = get_upper_lims(.x$temp, .x$cal.length, model_name = 'rezende_2019'),
+                                                     supp_errors = 'Y',
+                                                     convergence_count = FALSE)),
+         # create new temperature data
+         new_data = map(data, ~tibble(temp = seq(min(.x$temp), max(.x$temp), length.out = 100))),
+         # predict over that data,
+         preds =  map2(rezende, new_data, ~augment(.x, newdata = .y)))
+
+
+# refit model using nlsLM
+fit_nlsLM2 <- nlsLM(cal.length~rezende_2019(temp = temp, q10,a,b,c),
+                    data = gb_t,
+                    start = coef(d_fit_boot$rezende[[1]]),
+                    lower = get_lower_lims(gb_t$temp, gb_t$cal.length, model_name = 'rezende_2019'),
+                    upper = get_upper_lims(gb_t$temp, gb_t$cal.length, model_name = 'rezende_2019'),
+                    control = nls.lm.control(maxiter=500),
+                    weights = rep(1, times = nrow(gb_t)))
+
+# bootstrap using case resampling
+boot1 <- Boot(fit_nlsLM2, method = 'case')
+
+# predict over new data
+boot2_preds <- boot1$t %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  dplyr::mutate(iter = 1:n()) %>%
+  group_by_all() %>%
+  do(data.frame(temp = seq(min(gb_t$temp), max(gb_t$temp), length.out = 100))) %>%
+  ungroup() %>%
+  mutate(pred = rezende_2019(temp, q10, a,b,c))
+
+
+# calculate bootstrapped confidence intervals
+boot2_conf_preds <- group_by(boot2_preds, temp) %>%
+  dplyr::summarise(conf_lower = quantile(pred, 0.025),
+            conf_upper = quantile(pred, 0.975)) %>%
+  ungroup()
+
+# plot bootstrapped CIs
+ ggplot() +
+  geom_line(aes(temp, .fitted,group=bin), d_preds, col = 'blue') +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), boot2_conf_preds, fill = 'blue', alpha = 0.3) +
+  geom_point(aes(temp, cal.length), gb_t, size = 2) +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Growth rate')
+
+ 
+ ggplot()+geom_line(aes(temp, .fitted,group=bin), d_preds, col = 'blue',size=3)+geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), boot2_conf_preds, fill = 'blue', alpha = 0.3)+theme_classic()+
+scale_x_continuous(breaks=c(16,20,24,26,28,30))+
+scale_y_continuous(breaks=c(1,2,3,4,5,6),labels=c(1,2,3,4,5,6),limits=c(1,6))+geom_point(data=gb_t,aes(x=temp,y=cal.length,group="pop"),color="black",size=3)+ ylab("growth rate (mm)")+xlab("temperature (°C)")+theme(text=element_text(family="Times",size=22,color="black"),axis.text=element_text(color="black",size=22),legend.title = element_blank())+geom_segment(aes(x=28.118, y=1,xend=28.118,yend=5.13),size=2,linetype=2,color="gold2")+geom_segment(aes(x=16, y=5.06,xend=28.118,yend=5.13),size=2,linetype=2,color="gold2")+annotate("point",x=28.118,y=5.13,color="red",size=6)
+ 
+ #ggsave("rtpc_example.tiff",dpi=1200,height=7,width=7,units="in")
+
+
+```
+
+# Bridge the gap: bootstraps for everyone!
+
+```{r,include=F}
+growth.alive$population<-ifelse(growth.alive$pop=="Great Bay","gb",ifelse(growth.alive$pop=="Woods Hole","wh",ifelse(growth.alive$pop=="Oyster","oy",ifelse(growth.alive$pop=="Beaufort","bf",ifelse(growth.alive$pop=="Folly Beach","fb",ifelse(growth.alive$pop=="Skidaway","sk",ifelse(growth.alive$pop=="Willapa","wp",ifelse(growth.alive$pop=="Humboldt","hm",NA))))))))
+
+growth.alive$code<-paste(growth.alive$population,growth.alive$bin,sep="")
+code_un<-unique(growth.alive$code)
+preds_list<-data.frame("temp"=NA,"conf_lower"=NA,"conf_upper"=NA,"site"=NA)
+
+
+df<-list()
+for (i in 1:length(code_un)){
+  tmp<-filter(growth.alive,code==code_un[i])
+  df[[i]]<-tmp
+} 
+
+d_fit_list<-list()
+for (i in 1:length(df)){
+  d_fit_i<-nest(df[[i]], data = c(temp, cal.length, cal.length.start)) %>%
+  mutate(rezende = map(data, ~nls_multstart(cal.length~(1|cal.length.start)+rezende_2019(temp = temp, q10,a,b,c),
+                                                     data = .x,
+                                                     iter = c(3,3,3,3),
+                                                     start_lower = get_start_vals(.x$temp, .x$cal.length, model_name = 'rezende_2019') - 1,
+                                                     start_upper = get_start_vals(.x$temp, .x$cal.length, model_name = 'rezende_2019') + 1,
+                                                     lower = get_lower_lims(.x$temp, .x$cal.length, model_name = 'rezende_2019'),
+                                                     upper = get_upper_lims(.x$temp, .x$cal.length, model_name = 'rezende_2019'),
+                                                     supp_errors = 'Y',
+                                                     convergence_count = FALSE)))
+  d_fit_list[[i]]<-d_fit_i
+  
+}
+
+d_preds_list<-list()
+for (i in 1:length(d_fit_list)){
+  d_preds_i<-dplyr::mutate(d_fit_list[[i]], new_data = map(data, ~tibble(temp = seq(min(.x$temp), max(.x$temp), length.out = 100)))) %>%
+           # get rid of original data column
+           dplyr::select(., -data) %>%
+           # stack models into a single column, with an id column for model_name
+           pivot_longer(., names_to = 'model_name', values_to = 'fit', c(rezende)) %>%
+           # create new list column containing the predictions
+           # this uses both fit and new_data list columns
+           dplyr::mutate(preds = map2(fit, new_data, ~augment(.x, newdata = .y))) %>%
+           # select only the columns we want to keep
+           dplyr::select(bin, pop, bin, model_name, preds) %>%
+           # unlist the preds list column
+           unnest(preds)
+  d_preds_list[[i]]<-d_preds_i
+  
+}
+
+d_fit_boot_list<-list()
+for(i in 1:length(df)){
+  d_fit_boot_i<-nest(df[[i]], data = c(temp, cal.length, cal.length.start)) %>%
+  mutate(rezende = map(data, ~nls_multstart(cal.length~(1|cal.length.start)+rezende_2019(temp = temp, q10,a,b,c),
+                                                     data = .x,
+                                                     iter = c(3,3,3,3),
+                                                     start_lower = get_start_vals(.x$temp, .x$cal.length, model_name = 'rezende_2019') - 1,
+                                                     start_upper = get_start_vals(.x$temp, .x$cal.length, model_name = 'rezende_2019') + 1,
+                                                     lower = get_lower_lims(.x$temp, .x$cal.length, model_name = 'rezende_2019'),
+                                                     upper = get_upper_lims(.x$temp, .x$cal.length, model_name = 'rezende_2019'),
+                                                     supp_errors = 'Y',
+                                                     convergence_count = FALSE)),
+         # create new temperature data
+         new_data = map(data, ~tibble(temp = seq(min(.x$temp), max(.x$temp), length.out = 100))),
+         # predict over that data,
+         preds =  map2(rezende, new_data, ~augment(.x, newdata = .y)))
+  d_fit_boot_list[[i]]<-d_fit_boot_i
+}
+
+
+```
+
+#gb
+
+```{r}
+#gb1
+gb<-growth.alive%>%filter(pop=="Great Bay")
+gb<-na.omit(gb)
+gb<-data.frame("temp"=gb$temp,"cal.length"=gb$cal.length,"bin"=gb$bin,"pop"=gb$pop,"cal.length.start"=gb$cal.length.start)
+gb1<-gb%>%filter(bin==1)
+
+
+
+
+# refit model using nlsLM
+fit_nlsLM2_gb1 <- nlsLM(cal.length~rezende_2019(temp = temp, q10,a,b,c),
+                    data = gb1,
+                    start = coef(d_fit_boot_list[[7]]$rezende[[1]]),
+                    lower = get_lower_lims(gb1$temp, gb1$cal.length, model_name = 'rezende_2019'),
+                    upper = get_upper_lims(gb1$temp, gb1$cal.length, model_name = 'rezende_2019'),
+                    control = nls.lm.control(maxiter=500),
+                    weights = rep(1, times = nrow(gb1)))
+
+# bootstrap using case resampling
+boot1_gb1 <- Boot(fit_nlsLM2_gb1, method = 'case')
+
+# predict over new data
+boot2_preds_gb1 <- boot1_gb1$t %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  dplyr::mutate(iter = 1:n()) %>%
+  group_by_all() %>%
+  do(data.frame(temp = seq(min(gb1$temp), max(gb1$temp), length.out = 100))) %>%
+  ungroup() %>%
+  mutate(pred = rezende_2019(temp, q10, a,b,c))
+
+
+# calculate bootstrapped confidence intervals
+boot2_conf_preds_gb1 <- group_by(boot2_preds_gb1, temp) %>%
+  dplyr::summarise(conf_lower = quantile(pred, 0.025),
+            conf_upper = quantile(pred, 0.975)) %>%
+  ungroup()
+
+# plot bootstrapped CIs
+ ggplot() +
+  geom_line(aes(temp, .fitted,group=bin), d_preds_list[[7]], col = 'blue') +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), boot2_conf_preds_gb1, fill = 'blue', alpha = 0.3) +
+  geom_point(aes(temp, cal.length), gb1, size = 2) +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Growth rate',
+       title = 'Growth rate across temperatures')
+ 
+boot2_conf_preds_gb1<-as.data.frame(boot2_conf_preds_gb1)
+boot2_conf_preds_gb1$pop<-"Great Bay"
+boot2_conf_preds_gb1$bin<-1
+
+#gb2
+gb2<-gb%>%filter(bin==2)
+# refit model using nlsLM
+fit_nlsLM2_gb2 <- nlsLM(cal.length~rezende_2019(temp = temp, q10,a,b,c),
+                    data = gb2,
+                    start = coef(d_fit_boot_list[[8]]$rezende[[1]]),
+                    lower = get_lower_lims(gb2$temp, gb2$cal.length, model_name = 'rezende_2019'),
+                    upper = get_upper_lims(gb2$temp, gb2$cal.length, model_name = 'rezende_2019'),
+                    control = nls.lm.control(maxiter=500),
+                    weights = rep(1, times = nrow(gb2)))
+
+# bootstrap using case resampling
+boot1_gb2 <- Boot(fit_nlsLM2_gb2, method = 'case')
+
+# predict over new data
+boot2_preds_gb2 <- boot1_gb2$t %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  dplyr::mutate(iter = 1:n()) %>%
+  group_by_all() %>%
+  do(data.frame(temp = seq(min(gb2$temp), max(gb2$temp), length.out = 100))) %>%
+  ungroup() %>%
+  mutate(pred=rezende_2019(temp, q10, a,b,c))
+
+
+# calculate bootstrapped confidence intervals
+boot2_conf_preds_gb2 <- group_by(boot2_preds_gb2, temp) %>%
+  dplyr::summarise(conf_lower = quantile(pred, 0.025),
+            conf_upper = quantile(pred, 0.975)) %>%
+  ungroup()
+
+# plot bootstrapped CIs
+ ggplot() +
+  geom_line(aes(temp, .fitted,group=bin), d_preds_list[[8]], col = 'blue') +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), boot2_conf_preds_gb2, fill = 'blue', alpha = 0.3) +
+  geom_point(aes(temp, cal.length), gb2, size = 2) +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Growth rate',
+       title = 'Growth rate across temperatures')
+ 
+boot2_conf_preds_gb2<-as.data.frame(boot2_conf_preds_gb2)
+boot2_conf_preds_gb2$pop<-"Great Bay"
+boot2_conf_preds_gb2$bin<-2
+
+#gb3
+gb3<-gb%>%filter(bin==3)
+
+
+# refit model using nlsLM
+fit_nlsLM2_gb3 <- nlsLM(cal.length~rezende_2019(temp = temp, q10,a,b,c),
+                    data = gb3,
+                    start = coef(d_fit_boot_list[[9]]$rezende[[1]]),
+                    lower = get_lower_lims(gb3$temp, gb3$cal.length, model_name = 'rezende_2019'),
+                    upper = get_upper_lims(gb3$temp, gb3$cal.length, model_name = 'rezende_2019'),
+                    control = nls.lm.control(maxiter=500),
+                    weights = rep(1, times = nrow(gb3)))
+
+# bootstrap using case resampling
+boot1_gb3 <- Boot(fit_nlsLM2_gb3, method = 'case')
+
+# predict over new data
+boot2_preds_gb3 <- boot1_gb3$t %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  dplyr::mutate(iter = 1:n()) %>%
+  group_by_all() %>%
+  do(data.frame(temp = seq(min(gb3$temp), max(gb3$temp), length.out = 100))) %>%
+  ungroup() %>%
+  mutate(pred=rezende_2019(temp, q10, a,b,c))
+
+
+# calculate bootstrapped confidence intervals
+boot2_conf_preds_gb3 <- group_by(boot2_preds_gb3, temp) %>%
+  dplyr::summarise(conf_lower = quantile(pred, 0.025),
+            conf_upper = quantile(pred, 0.975)) %>%
+  ungroup()
+
+# plot bootstrapped CIs
+ ggplot() +
+  geom_line(aes(temp, .fitted,group=bin), d_preds_list[[9]], col = 'blue') +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), boot2_conf_preds_gb3, fill = 'blue', alpha = 0.3) +
+  geom_point(aes(temp, cal.length), gb3, size = 2) +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Growth rate',
+       title = 'Growth rate across temperatures')
+ 
+boot2_conf_preds_gb3<-as.data.frame(boot2_conf_preds_gb3)
+boot2_conf_preds_gb3$pop<-"Great Bay"
+boot2_conf_preds_gb3$bin<-3
+
+boot2_conf_preds_gb<-rbind(boot2_conf_preds_gb1,boot2_conf_preds_gb2,boot2_conf_preds_gb3)
+d_preds_list_gb<-rbind(d_preds_list[[7]],d_preds_list[[8]],d_preds_list[[9]])
+```
+
+#wh
+```{r}
+#wh1
+wh<-growth.alive%>%filter(pop=="Woods Hole")
+wh<-na.omit(wh)
+wh<-data.frame("temp"=wh$temp,"cal.length"=wh$cal.length,"bin"=wh$bin,"pop"=wh$pop,"cal.length.start"=wh$cal.length.start)
+wh1<-wh%>%filter(bin==1)
+
+
+
+
+# refit model using nlsLM
+fit_nlsLM2_wh1 <- nlsLM(cal.length~rezende_2019(temp = temp, q10,a,b,c),
+                    data = wh1,
+                    start = coef(d_fit_boot_list[[10]]$rezende[[1]]),
+                    lower = get_lower_lims(wh1$temp, wh1$cal.length, model_name = 'rezende_2019'),
+                    upper = get_upper_lims(wh1$temp, wh1$cal.length, model_name = 'rezende_2019'),
+                    control = nls.lm.control(maxiter=500),
+                    weights = rep(1, times = nrow(wh1)))
+
+# bootstrap using case resampling
+boot1_wh1 <- Boot(fit_nlsLM2_wh1, method = 'case')
+
+# predict over new data
+boot2_preds_wh1 <- boot1_wh1$t %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  dplyr::mutate(iter = 1:n()) %>%
+  group_by_all() %>%
+  do(data.frame(temp = seq(min(wh1$temp), max(wh1$temp), length.out = 100))) %>%
+  ungroup() %>%
+  mutate(pred=rezende_2019(temp, q10, a,b,c))
+
+
+# calculate bootstrapped confidence intervals
+boot2_conf_preds_wh1 <- group_by(boot2_preds_wh1, temp) %>%
+  dplyr::summarise(conf_lower = quantile(pred, 0.025),
+            conf_upper = quantile(pred, 0.975)) %>%
+  ungroup()
+
+# plot bootstrapped CIs
+ ggplot() +
+  geom_line(aes(temp, .fitted,group=bin), d_preds_list[[10]], col = 'blue') +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), boot2_conf_preds_wh1, fill = 'blue', alpha = 0.3) +
+  geom_point(aes(temp, cal.length), wh1, size = 2) +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Growth rate',
+       title = 'Growth rate across temperatures')
+ 
+boot2_conf_preds_wh1<-as.data.frame(boot2_conf_preds_wh1)
+boot2_conf_preds_wh1$pop<-"Woods Hole"
+boot2_conf_preds_wh1$bin<-1
+
+#wh2
+wh2<-wh%>%filter(bin==2)
+# refit model using nlsLM
+fit_nlsLM2_wh2 <- nlsLM(cal.length~rezende_2019(temp = temp, q10,a,b,c),
+                    data = wh2,
+                    start = coef(d_fit_boot_list[[11]]$rezende[[1]]),
+                    lower = get_lower_lims(wh2$temp, wh2$cal.length, model_name = 'rezende_2019'),
+                    upper = get_upper_lims(wh2$temp, wh2$cal.length, model_name = 'rezende_2019'),
+                    control = nls.lm.control(maxiter=500),
+                    weights = rep(1, times = nrow(wh2)))
+
+# bootstrap using case resampling
+boot1_wh2 <- Boot(fit_nlsLM2_wh2, method = 'case')
+
+# predict over new data
+boot2_preds_wh2 <- boot1_wh2$t %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  dplyr::mutate(iter = 1:n()) %>%
+  group_by_all() %>%
+  do(data.frame(temp = seq(min(wh2$temp), max(wh2$temp), length.out = 100))) %>%
+  ungroup() %>%
+  mutate(pred=rezende_2019(temp, q10, a,b,c))
+
+
+# calculate bootstrapped confidence intervals
+boot2_conf_preds_wh2 <- group_by(boot2_preds_wh2, temp) %>%
+  dplyr::summarise(conf_lower = quantile(pred, 0.025),
+            conf_upper = quantile(pred, 0.975)) %>%
+  ungroup()
+
+# plot bootstrapped CIs
+ ggplot() +
+  geom_line(aes(temp, .fitted,group=bin), d_preds_list[[11]], col = 'blue') +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), boot2_conf_preds_wh2, fill = 'blue', alpha = 0.3) +
+  geom_point(aes(temp, cal.length), wh2, size = 2) +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Growth rate',
+       title = 'Growth rate across temperatures')
+ 
+boot2_conf_preds_wh2<-as.data.frame(boot2_conf_preds_wh2)
+boot2_conf_preds_wh2$pop<-"Woods Hole"
+boot2_conf_preds_wh2$bin<-2
+
+#wh3
+wh3<-wh%>%filter(bin==3)
+
+
+# refit model using nlsLM
+fit_nlsLM2_wh3 <- nlsLM(cal.length~rezende_2019(temp = temp, q10,a,b,c),
+                    data = wh3,
+                    start = coef(d_fit_boot_list[[12]]$rezende[[1]]),
+                    lower = get_lower_lims(wh3$temp, wh3$cal.length, model_name = 'rezende_2019'),
+                    upper = get_upper_lims(wh3$temp, wh3$cal.length, model_name = 'rezende_2019'),
+                    control = nls.lm.control(maxiter=500),
+                    weights = rep(1, times = nrow(wh3)))
+
+# bootstrap using case resampling
+boot1_wh3 <- Boot(fit_nlsLM2_wh3, method = 'case')
+
+# predict over new data
+boot2_preds_wh3 <- boot1_wh3$t %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  dplyr::mutate(iter = 1:n()) %>%
+  group_by_all() %>%
+  do(data.frame(temp = seq(min(wh3$temp), max(wh3$temp), length.out = 100))) %>%
+  ungroup() %>%
+  mutate(pred=rezende_2019(temp, q10, a,b,c))
+
+
+# calculate bootstrapped confidence intervals
+boot2_conf_preds_wh3 <- group_by(boot2_preds_wh3, temp) %>%
+  dplyr::summarise(conf_lower = quantile(pred, 0.025),
+            conf_upper = quantile(pred, 0.975)) %>%
+  ungroup()
+
+# plot bootstrapped CIs
+ ggplot() +
+  geom_line(aes(temp, .fitted,group=bin), d_preds_list[[12]], col = 'blue') +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), boot2_conf_preds_wh3, fill = 'blue', alpha = 0.3) +
+  geom_point(aes(temp, cal.length), wh3, size = 2) +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Growth rate',
+       title = 'Growth rate across temperatures')
+ 
+boot2_conf_preds_wh3<-as.data.frame(boot2_conf_preds_wh3)
+boot2_conf_preds_wh3$pop<-"Woods Hole"
+boot2_conf_preds_wh3$bin<-3
+
+boot2_conf_preds_wh<-rbind(boot2_conf_preds_wh1,boot2_conf_preds_wh2,boot2_conf_preds_wh3)
+d_preds_list_wh<-rbind(d_preds_list[[10]],d_preds_list[[11]],d_preds_list[[12]])
+```
+
+#oy
+```{r}
+#oy1
+oy<-growth.alive%>%filter(pop=="Oyster")
+oy<-na.omit(oy)
+oy<-data.frame("temp"=oy$temp,"cal.length"=oy$cal.length,"bin"=oy$bin,"pop"=oy$pop,"cal.length.start"=oy$cal.length.start)
+oy1<-oy%>%filter(bin==1)
+
+
+
+
+# refit model using nlsLM
+fit_nlsLM2_oy1 <- nlsLM(cal.length~rezende_2019(temp = temp, q10,a,b,c),
+                    data = oy1,
+                    start = coef(d_fit_boot_list[[13]]$rezende[[1]]),
+                    lower = get_lower_lims(oy1$temp, oy1$cal.length, model_name = 'rezende_2019'),
+                    upper = get_upper_lims(oy1$temp, oy1$cal.length, model_name = 'rezende_2019'),
+                    control = nls.lm.control(maxiter=500),
+                    weights = rep(1, times = nrow(oy1)))
+
+# bootstrap using case resampling
+boot1_oy1 <- Boot(fit_nlsLM2_oy1, method = 'case')
+
+# predict over new data
+boot2_preds_oy1 <- boot1_oy1$t %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  dplyr::mutate(iter = 1:n()) %>%
+  group_by_all() %>%
+  do(data.frame(temp = seq(min(oy1$temp), max(oy1$temp), length.out = 100))) %>%
+  ungroup() %>%
+  mutate(pred=rezende_2019(temp, q10, a,b,c))
+
+
+# calculate bootstrapped confidence intervals
+boot2_conf_preds_oy1 <- group_by(boot2_preds_oy1, temp) %>%
+  dplyr::summarise(conf_lower = quantile(pred, 0.025),
+            conf_upper = quantile(pred, 0.975)) %>%
+  ungroup()
+
+# plot bootstrapped CIs
+ ggplot() +
+  geom_line(aes(temp, .fitted,group=bin), d_preds_list[[13]], col = 'blue') +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), boot2_conf_preds_oy1, fill = 'blue', alpha = 0.3) +
+  geom_point(aes(temp, cal.length), oy1, size = 2) +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Growth rate',
+       title = 'Growth rate across temperatures')
+ 
+boot2_conf_preds_oy1<-as.data.frame(boot2_conf_preds_oy1)
+boot2_conf_preds_oy1$pop<-"Oyster"
+boot2_conf_preds_oy1$bin<-1
+
+#oy2
+oy2<-oy%>%filter(bin==2)
+# refit model using nlsLM
+fit_nlsLM2_oy2 <- nlsLM(cal.length~rezende_2019(temp = temp, q10,a,b,c),
+                    data = oy2,
+                    start = coef(d_fit_boot_list[[14]]$rezende[[1]]),
+                    lower = get_lower_lims(oy2$temp, oy2$cal.length, model_name = 'rezende_2019'),
+                    upper = get_upper_lims(oy2$temp, oy2$cal.length, model_name = 'rezende_2019'),
+                    control = nls.lm.control(maxiter=500),
+                    weights = rep(1, times = nrow(oy2)))
+
+# bootstrap using case resampling
+boot1_oy2 <- Boot(fit_nlsLM2_oy2, method = 'case')
+
+# predict over new data
+boot2_preds_oy2 <- boot1_oy2$t %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  dplyr::mutate(iter = 1:n()) %>%
+  group_by_all() %>%
+  do(data.frame(temp = seq(min(oy2$temp), max(oy2$temp), length.out = 100))) %>%
+  ungroup() %>%
+  mutate(pred=rezende_2019(temp, q10, a,b,c))
+
+
+# calculate bootstrapped confidence intervals
+boot2_conf_preds_oy2 <- group_by(boot2_preds_oy2, temp) %>%
+  dplyr::summarise(conf_lower = quantile(pred, 0.025),
+            conf_upper = quantile(pred, 0.975)) %>%
+  ungroup()
+
+# plot bootstrapped CIs
+ ggplot() +
+  geom_line(aes(temp, .fitted,group=bin), d_preds_list[[14]], col = 'blue') +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), boot2_conf_preds_oy2, fill = 'blue', alpha = 0.3) +
+  geom_point(aes(temp, cal.length), oy2, size = 2) +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Growth rate',
+       title = 'Growth rate across temperatures')
+ 
+boot2_conf_preds_oy2<-as.data.frame(boot2_conf_preds_oy2)
+boot2_conf_preds_oy2$pop<-"Oyster"
+boot2_conf_preds_oy2$bin<-2
+
+#oy3
+oy3<-oy%>%filter(bin==3)
+
+
+# refit model using nlsLM
+fit_nlsLM2_oy3 <- nlsLM(cal.length~rezende_2019(temp = temp, q10,a,b,c),
+                    data = oy3,
+                    start = coef(d_fit_boot_list[[15]]$rezende[[1]]),
+                    lower = get_lower_lims(oy3$temp, oy3$cal.length, model_name = 'rezende_2019'),
+                    upper = get_upper_lims(oy3$temp, oy3$cal.length, model_name = 'rezende_2019'),
+                    control = nls.lm.control(maxiter=500),
+                    weights = rep(1, times = nrow(oy3)))
+
+# bootstrap using case resampling
+boot1_oy3 <- Boot(fit_nlsLM2_oy3, method = 'case')
+
+# predict over new data
+boot2_preds_oy3 <- boot1_oy3$t %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  dplyr::mutate(iter = 1:n()) %>%
+  group_by_all() %>%
+  do(data.frame(temp = seq(min(oy3$temp), max(oy3$temp), length.out = 100))) %>%
+  ungroup() %>%
+  mutate(pred=rezende_2019(temp, q10, a,b,c))
+
+
+# calculate bootstrapped confidence intervals
+boot2_conf_preds_oy3 <- group_by(boot2_preds_oy3, temp) %>%
+  dplyr::summarise(conf_lower = quantile(pred, 0.025),
+            conf_upper = quantile(pred, 0.975)) %>%
+  ungroup()
+
+# plot bootstrapped CIs
+ ggplot() +
+  geom_line(aes(temp, .fitted,group=bin), d_preds_list[[15]], col = 'blue') +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), boot2_conf_preds_oy3, fill = 'blue', alpha = 0.3) +
+  geom_point(aes(temp, cal.length), oy3, size = 2) +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Growth rate',
+       title = 'Growth rate across temperatures')
+ 
+boot2_conf_preds_oy3<-as.data.frame(boot2_conf_preds_oy3)
+boot2_conf_preds_oy3$pop<-"Oyster"
+boot2_conf_preds_oy3$bin<-3
+
+boot2_conf_preds_oy<-rbind(boot2_conf_preds_oy1,boot2_conf_preds_oy2,boot2_conf_preds_oy3)
+d_preds_list_oy<-rbind(d_preds_list[[13]],d_preds_list[[14]],d_preds_list[[15]])
+```
+
+# bf
+
+```{r}
+#bf1
+bf<-growth.alive%>%filter(pop=="Beaufort")
+bf<-na.omit(bf)
+bf<-data.frame("temp"=bf$temp,"cal.length"=bf$cal.length,"bin"=bf$bin,"pop"=bf$pop,"cal.length.start"=bf$cal.length.start)
+bf1<-bf%>%filter(bin==1)
+
+
+
+
+# refit model using nlsLM
+fit_nlsLM2_bf1 <- nlsLM(cal.length~rezende_2019(temp = temp, q10,a,b,c),
+                    data = bf1,
+                    start = coef(d_fit_boot_list[[16]]$rezende[[1]]),
+                    lower = get_lower_lims(bf1$temp, bf1$cal.length, model_name = 'rezende_2019'),
+                    upper = get_upper_lims(bf1$temp, bf1$cal.length, model_name = 'rezende_2019'),
+                    control = nls.lm.control(maxiter=500),
+                    weights = rep(1, times = nrow(bf1)))
+
+# bootstrap using case resampling
+boot1_bf1 <- Boot(fit_nlsLM2_bf1, method = 'case')
+
+# predict over new data
+boot2_preds_bf1 <- boot1_bf1$t %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  dplyr::mutate(iter = 1:n()) %>%
+  group_by_all() %>%
+  do(data.frame(temp = seq(min(bf1$temp), max(bf1$temp), length.out = 100))) %>%
+  ungroup() %>%
+  mutate(pred=rezende_2019(temp, q10, a,b,c))
+
+
+# calculate bootstrapped confidence intervals
+boot2_conf_preds_bf1 <- group_by(boot2_preds_bf1, temp) %>%
+  dplyr::summarise(conf_lower = quantile(pred, 0.025),
+            conf_upper = quantile(pred, 0.975)) %>%
+  ungroup()
+
+# plot bootstrapped CIs
+ ggplot() +
+  geom_line(aes(temp, .fitted,group=bin), d_preds_list[[16]], col = 'blue') +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), boot2_conf_preds_bf1, fill = 'blue', alpha = 0.3) +
+  geom_point(aes(temp, cal.length), bf1, size = 2) +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Growth rate',
+       title = 'Growth rate across temperatures')
+ 
+boot2_conf_preds_bf1<-as.data.frame(boot2_conf_preds_bf1)
+boot2_conf_preds_bf1$pop<-"Beaufort"
+boot2_conf_preds_bf1$bin<-1
+
+#bf2
+bf2<-bf%>%filter(bin==2)
+# refit model using nlsLM
+fit_nlsLM2_bf2 <- nlsLM(cal.length~rezende_2019(temp = temp, q10,a,b,c),
+                    data = bf2,
+                    start = coef(d_fit_boot_list[[17]]$rezende[[1]]),
+                    lower = get_lower_lims(bf2$temp, bf2$cal.length, model_name = 'rezende_2019'),
+                    upper = get_upper_lims(bf2$temp, bf2$cal.length, model_name = 'rezende_2019'),
+                    control = nls.lm.control(maxiter=500),
+                    weights = rep(1, times = nrow(bf2)))
+
+# bootstrap using case resampling
+boot1_bf2 <- Boot(fit_nlsLM2_bf2, method = 'case')
+
+# predict over new data
+boot2_preds_bf2 <- boot1_bf2$t %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  dplyr::mutate(iter = 1:n()) %>%
+  group_by_all() %>%
+  do(data.frame(temp = seq(min(bf2$temp), max(bf2$temp), length.out = 100))) %>%
+  ungroup() %>%
+  mutate(pred=rezende_2019(temp, q10, a,b,c))
+
+
+# calculate bootstrapped confidence intervals
+boot2_conf_preds_bf2 <- group_by(boot2_preds_bf2, temp) %>%
+  dplyr::summarise(conf_lower = quantile(pred, 0.025),
+            conf_upper = quantile(pred, 0.975)) %>%
+  ungroup()
+
+# plot bootstrapped CIs
+ ggplot() +
+  geom_line(aes(temp, .fitted,group=bin), d_preds_list[[17]], col = 'blue') +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), boot2_conf_preds_bf2, fill = 'blue', alpha = 0.3) +
+  geom_point(aes(temp, cal.length), bf2, size = 2) +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Growth rate',
+       title = 'Growth rate across temperatures')
+ 
+boot2_conf_preds_bf2<-as.data.frame(boot2_conf_preds_bf2)
+boot2_conf_preds_bf2$pop<-"Beaufort"
+boot2_conf_preds_bf2$bin<-2
+
+#bf3
+bf3<-bf%>%filter(bin==3)
+
+
+# refit model using nlsLM
+fit_nlsLM2_bf3 <- nlsLM(cal.length~rezende_2019(temp = temp, q10,a,b,c),
+                    data = bf3,
+                    start = coef(d_fit_boot_list[[18]]$rezende[[1]]),
+                    lower = get_lower_lims(bf3$temp, bf3$cal.length, model_name = 'rezende_2019'),
+                    upper = get_upper_lims(bf3$temp, bf3$cal.length, model_name = 'rezende_2019'),
+                    control = nls.lm.control(maxiter=500),
+                    weights = rep(1, times = nrow(bf3)))
+
+# bootstrap using case resampling
+boot1_bf3 <- Boot(fit_nlsLM2_bf3, method = 'case')
+
+# predict over new data
+boot2_preds_bf3 <- boot1_bf3$t %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  dplyr::mutate(iter = 1:n()) %>%
+  group_by_all() %>%
+  do(data.frame(temp = seq(min(bf3$temp), max(bf3$temp), length.out = 100))) %>%
+  ungroup() %>%
+  mutate(pred=rezende_2019(temp, q10, a,b,c))
+
+
+# calculate bootstrapped confidence intervals
+boot2_conf_preds_bf3 <- group_by(boot2_preds_bf3, temp) %>%
+  dplyr::summarise(conf_lower = quantile(pred, 0.025),
+            conf_upper = quantile(pred, 0.975)) %>%
+  ungroup()
+
+# plot bootstrapped CIs
+ ggplot() +
+  geom_line(aes(temp, .fitted,group=bin), d_preds_list[[18]], col = 'blue') +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), boot2_conf_preds_bf3, fill = 'blue', alpha = 0.3) +
+  geom_point(aes(temp, cal.length), bf3, size = 2) +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Growth rate',
+       title = 'Growth rate across temperatures')
+ 
+boot2_conf_preds_bf3<-as.data.frame(boot2_conf_preds_bf3)
+boot2_conf_preds_bf3$pop<-"Beaufort"
+boot2_conf_preds_bf3$bin<-3
+
+boot2_conf_preds_bf<-rbind(boot2_conf_preds_bf1,boot2_conf_preds_bf2,boot2_conf_preds_bf3)
+d_preds_list_bf<-rbind(d_preds_list[[16]],d_preds_list[[17]],d_preds_list[[18]])
+```
+
+#fb
+
+
+```{r}
+#fb1
+fb<-growth.alive%>%filter(pop=="Folly Beach")
+fb<-na.omit(fb)
+fb<-data.frame("temp"=fb$temp,"cal.length"=fb$cal.length,"bin"=fb$bin,"pop"=fb$pop,"cal.length.start"=fb$cal.length.start)
+fb1<-fb%>%filter(bin==1)
+
+
+
+
+# refit model using nlsLM
+fit_nlsLM2_fb1 <- nlsLM(cal.length~rezende_2019(temp = temp, q10,a,b,c),
+                    data = fb1,
+                    start = coef(d_fit_boot_list[[19]]$rezende[[1]]),
+                    lower = get_lower_lims(fb1$temp, fb1$cal.length, model_name = 'rezende_2019'),
+                    upper = get_upper_lims(fb1$temp, fb1$cal.length, model_name = 'rezende_2019'),
+                    control = nls.lm.control(maxiter=500),
+                    weights = rep(1, times = nrow(fb1)))
+
+# bootstrap using case resampling
+boot1_fb1 <- Boot(fit_nlsLM2_fb1, method = 'case')
+
+# predict over new data
+boot2_preds_fb1 <- boot1_fb1$t %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  dplyr::mutate(iter = 1:n()) %>%
+  group_by_all() %>%
+  do(data.frame(temp = seq(min(fb1$temp), max(fb1$temp), length.out = 100))) %>%
+  ungroup() %>%
+  mutate(pred=rezende_2019(temp, q10, a,b,c))
+
+
+# calculate bootstrapped confidence intervals
+boot2_conf_preds_fb1 <- group_by(boot2_preds_fb1, temp) %>%
+  dplyr::summarise(conf_lower = quantile(pred, 0.025),
+            conf_upper = quantile(pred, 0.975)) %>%
+  ungroup()
+
+# plot bootstrapped CIs
+ ggplot() +
+  geom_line(aes(temp, .fitted,group=bin), d_preds_list[[19]], col = 'blue') +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), boot2_conf_preds_fb1, fill = 'blue', alpha = 0.3) +
+  geom_point(aes(temp, cal.length), fb1, size = 2) +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Growth rate',
+       title = 'Growth rate across temperatures')
+ 
+boot2_conf_preds_fb1<-as.data.frame(boot2_conf_preds_fb1)
+boot2_conf_preds_fb1$pop<-"Folly Beach"
+boot2_conf_preds_fb1$bin<-1
+
+#fb2
+fb2<-fb%>%filter(bin==2)
+# refit model using nlsLM
+fit_nlsLM2_fb2 <- nlsLM(cal.length~rezende_2019(temp = temp, q10,a,b,c),
+                    data = fb2,
+                    start = coef(d_fit_boot_list[[20]]$rezende[[1]]),
+                    lower = get_lower_lims(fb2$temp, fb2$cal.length, model_name = 'rezende_2019'),
+                    upper = get_upper_lims(fb2$temp, fb2$cal.length, model_name = 'rezende_2019'),
+                    control = nls.lm.control(maxiter=500),
+                    weights = rep(1, times = nrow(fb2)))
+
+# bootstrap using case resampling
+boot1_fb2 <- Boot(fit_nlsLM2_fb2, method = 'case')
+
+# predict over new data
+boot2_preds_fb2 <- boot1_fb2$t %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  dplyr::mutate(iter = 1:n()) %>%
+  group_by_all() %>%
+  do(data.frame(temp = seq(min(fb2$temp), max(fb2$temp), length.out = 100))) %>%
+  ungroup() %>%
+  mutate(pred=rezende_2019(temp, q10, a,b,c))
+
+
+# calculate bootstrapped confidence intervals
+boot2_conf_preds_fb2 <- group_by(boot2_preds_fb2, temp) %>%
+  dplyr::summarise(conf_lower = quantile(pred, 0.025),
+            conf_upper = quantile(pred, 0.975)) %>%
+  ungroup()
+
+# plot bootstrapped CIs
+ ggplot() +
+  geom_line(aes(temp, .fitted,group=bin), d_preds_list[[20]], col = 'blue') +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), boot2_conf_preds_fb2, fill = 'blue', alpha = 0.3) +
+  geom_point(aes(temp, cal.length), fb2, size = 2) +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Growth rate',
+       title = 'Growth rate across temperatures')
+ 
+boot2_conf_preds_fb2<-as.data.frame(boot2_conf_preds_fb2)
+boot2_conf_preds_fb2$pop<-"Folly Beach"
+boot2_conf_preds_fb2$bin<-2
+
+#fb3
+fb3<-fb%>%filter(bin==3)
+
+
+# refit model using nlsLM
+fit_nlsLM2_fb3 <- nlsLM(cal.length~rezende_2019(temp = temp, q10,a,b,c),
+                    data = fb3,
+                    start = coef(d_fit_boot_list[[21]]$rezende[[1]]),
+                    lower = get_lower_lims(fb3$temp, fb3$cal.length, model_name = 'rezende_2019'),
+                    upper = get_upper_lims(fb3$temp, fb3$cal.length, model_name = 'rezende_2019'),
+                    control = nls.lm.control(maxiter=500),
+                    weights = rep(1, times = nrow(fb3)))
+
+# bootstrap using case resampling
+boot1_fb3 <- Boot(fit_nlsLM2_fb3, method = 'case')
+
+# predict over new data
+boot2_preds_fb3 <- boot1_fb3$t %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  dplyr::mutate(iter = 1:n()) %>%
+  group_by_all() %>%
+  do(data.frame(temp = seq(min(fb3$temp), max(fb3$temp), length.out = 100))) %>%
+  ungroup() %>%
+  mutate(pred=rezende_2019(temp, q10, a,b,c))
+
+
+# calculate bootstrapped confidence intervals
+boot2_conf_preds_fb3 <- group_by(boot2_preds_fb3, temp) %>%
+  dplyr::summarise(conf_lower = quantile(pred, 0.025),
+            conf_upper = quantile(pred, 0.975)) %>%
+  ungroup()
+
+# plot bootstrapped CIs
+ ggplot() +
+  geom_line(aes(temp, .fitted,group=bin), d_preds_list[[21]], col = 'blue') +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), boot2_conf_preds_fb3, fill = 'blue', alpha = 0.3) +
+  geom_point(aes(temp, cal.length), fb3, size = 2) +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Growth rate',
+       title = 'Growth rate across temperatures')
+ 
+boot2_conf_preds_fb3<-as.data.frame(boot2_conf_preds_fb3)
+boot2_conf_preds_fb3$pop<-"Folly Beach"
+boot2_conf_preds_fb3$bin<-3
+
+boot2_conf_preds_fb<-rbind(boot2_conf_preds_fb1,boot2_conf_preds_fb2,boot2_conf_preds_fb3)
+d_preds_list_fb<-rbind(d_preds_list[[19]],d_preds_list[[20]],d_preds_list[[21]])
+```
+# sk
+
+```{r}
+#sk1
+sk<-growth.alive%>%filter(pop=="Skidaway")
+sk<-na.omit(sk)
+sk<-data.frame("temp"=sk$temp,"cal.length"=sk$cal.length,"bin"=sk$bin,"pop"=sk$pop,"cal.length.start"=sk$cal.length.start)
+sk1<-sk%>%filter(bin==1)
+
+
+
+
+# refit model using nlsLM
+fit_nlsLM2_sk1 <- nlsLM(cal.length~rezende_2019(temp = temp, q10,a,b,c),
+                    data = sk1,
+                    start = coef(d_fit_boot_list[[22]]$rezende[[1]]),
+                    lower = get_lower_lims(sk1$temp, sk1$cal.length, model_name = 'rezende_2019'),
+                    upper = get_upper_lims(sk1$temp, sk1$cal.length, model_name = 'rezende_2019'),
+                    control = nls.lm.control(maxiter=500),
+                    weights = rep(1, times = nrow(sk1)))
+
+# bootstrap using case resampling
+boot1_sk1 <- Boot(fit_nlsLM2_sk1, method = 'case')
+
+# predict over new data
+boot2_preds_sk1 <- boot1_sk1$t %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  dplyr::mutate(iter = 1:n()) %>%
+  group_by_all() %>%
+  do(data.frame(temp = seq(min(sk1$temp), max(sk1$temp), length.out = 100))) %>%
+  ungroup() %>%
+  mutate(pred=rezende_2019(temp, q10, a,b,c))
+
+
+# calculate bootstrapped confidence intervals
+boot2_conf_preds_sk1 <- group_by(boot2_preds_sk1, temp) %>%
+  dplyr::summarise(conf_lower = quantile(pred, 0.025),
+            conf_upper = quantile(pred, 0.975)) %>%
+  ungroup()
+
+# plot bootstrapped CIs
+ ggplot() +
+  geom_line(aes(temp, .fitted,group=bin), d_preds_list[[22]], col = 'blue') +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), boot2_conf_preds_sk1, fill = 'blue', alpha = 0.3) +
+  geom_point(aes(temp, cal.length), sk1, size = 2) +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Growth rate',
+       title = 'Growth rate across temperatures')
+ 
+boot2_conf_preds_sk1<-as.data.frame(boot2_conf_preds_sk1)
+boot2_conf_preds_sk1$pop<-"Skidaway"
+boot2_conf_preds_sk1$bin<-1
+
+#sk2
+sk2<-sk%>%filter(bin==2)
+# refit model using nlsLM
+fit_nlsLM2_sk2 <- nlsLM(cal.length~rezende_2019(temp = temp, q10,a,b,c),
+                    data = sk2,
+                    start = coef(d_fit_boot_list[[23]]$rezende[[1]]),
+                    lower = get_lower_lims(sk2$temp, sk2$cal.length, model_name = 'rezende_2019'),
+                    upper = get_upper_lims(sk2$temp, sk2$cal.length, model_name = 'rezende_2019'),
+                    control = nls.lm.control(maxiter=500),
+                    weights = rep(1, times = nrow(sk2)))
+
+# bootstrap using case resampling
+boot1_sk2 <- Boot(fit_nlsLM2_sk2, method = 'case')
+
+# predict over new data
+boot2_preds_sk2 <- boot1_sk2$t %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  dplyr::mutate(iter = 1:n()) %>%
+  group_by_all() %>%
+  do(data.frame(temp = seq(min(sk2$temp), max(sk2$temp), length.out = 100))) %>%
+  ungroup() %>%
+  mutate(pred=rezende_2019(temp, q10, a,b,c))
+
+
+# calculate bootstrapped confidence intervals
+boot2_conf_preds_sk2 <- group_by(boot2_preds_sk2, temp) %>%
+  dplyr::summarise(conf_lower = quantile(pred, 0.025),
+            conf_upper = quantile(pred, 0.975)) %>%
+  ungroup()
+
+# plot bootstrapped CIs
+ ggplot() +
+  geom_line(aes(temp, .fitted,group=bin), d_preds_list[[23]], col = 'blue') +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), boot2_conf_preds_sk2, fill = 'blue', alpha = 0.3) +
+  geom_point(aes(temp, cal.length), sk2, size = 2) +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Growth rate',
+       title = 'Growth rate across temperatures')
+ 
+boot2_conf_preds_sk2<-as.data.frame(boot2_conf_preds_sk2)
+boot2_conf_preds_sk2$pop<-"Skidaway"
+boot2_conf_preds_sk2$bin<-2
+
+#sk3
+sk3<-sk%>%filter(bin==3)
+
+
+# refit model using nlsLM
+fit_nlsLM2_sk3 <- nlsLM(cal.length~rezende_2019(temp = temp, q10,a,b,c),
+                    data = sk3,
+                    start = coef(d_fit_boot_list[[24]]$rezende[[1]]),
+                    lower = get_lower_lims(sk3$temp, sk3$cal.length, model_name = 'rezende_2019'),
+                    upper = get_upper_lims(sk3$temp, sk3$cal.length, model_name = 'rezende_2019'),
+                    control = nls.lm.control(maxiter=500),
+                    weights = rep(1, times = nrow(sk3)))
+
+# bootstrap using case resampling
+boot1_sk3 <- Boot(fit_nlsLM2_sk3, method = 'case')
+
+# predict over new data
+boot2_preds_sk3 <- boot1_sk3$t %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  dplyr::mutate(iter = 1:n()) %>%
+  group_by_all() %>%
+  do(data.frame(temp = seq(min(sk3$temp), max(sk3$temp), length.out = 100))) %>%
+  ungroup() %>%
+  mutate(pred=rezende_2019(temp, q10, a,b,c))
+
+
+# calculate bootstrapped confidence intervals
+boot2_conf_preds_sk3 <- group_by(boot2_preds_sk3, temp) %>%
+  dplyr::summarise(conf_lower = quantile(pred, 0.025),
+            conf_upper = quantile(pred, 0.975)) %>%
+  ungroup()
+
+# plot bootstrapped CIs
+ ggplot() +
+  geom_line(aes(temp, .fitted,group=bin), d_preds_list[[24]], col = 'blue') +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), boot2_conf_preds_sk3, fill = 'blue', alpha = 0.3) +
+  geom_point(aes(temp, cal.length), sk3, size = 2) +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Growth rate',
+       title = 'Growth rate across temperatures')
+ 
+boot2_conf_preds_sk3<-as.data.frame(boot2_conf_preds_sk3)
+boot2_conf_preds_sk3$pop<-"Skidaway"
+boot2_conf_preds_sk3$bin<-3
+
+boot2_conf_preds_sk<-rbind(boot2_conf_preds_sk1,boot2_conf_preds_sk2,boot2_conf_preds_sk3)
+d_preds_list_sk<-rbind(d_preds_list[[22]],d_preds_list[[23]],d_preds_list[[24]])
+```
+# wp
+
+```{r}
+#wp1
+wp<-growth.alive%>%filter(pop=="Willapa")
+wp<-na.omit(wp)
+wp<-data.frame("temp"=wp$temp,"cal.length"=wp$cal.length,"bin"=wp$bin,"pop"=wp$pop,"cal.length.start"=wp$cal.length.start)
+wp1<-wp%>%filter(bin==1)
+
+
+
+
+# refit model using nlsLM
+fit_nlsLM2_wp1 <- nlsLM(cal.length~rezende_2019(temp = temp, q10,a,b,c),
+                    data = wp1,
+                    start = coef(d_fit_boot_list[[1]]$rezende[[1]]),
+                    lower = get_lower_lims(wp1$temp, wp1$cal.length, model_name = 'rezende_2019'),
+                    upper = get_upper_lims(wp1$temp, wp1$cal.length, model_name = 'rezende_2019'),
+                    control = nls.lm.control(maxiter=500),
+                    weights = rep(1, times = nrow(wp1)))
+
+# bootstrap using case resampling
+boot1_wp1 <- Boot(fit_nlsLM2_wp1, method = 'case')
+
+# predict over new data
+boot2_preds_wp1 <- boot1_wp1$t %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  dplyr::mutate(iter = 1:n()) %>%
+  group_by_all() %>%
+  do(data.frame(temp = seq(min(wp1$temp), max(wp1$temp), length.out = 100))) %>%
+  ungroup() %>%
+  mutate(pred=rezende_2019(temp, q10, a,b,c))
+
+
+# calculate bootstrapped confidence intervals
+boot2_conf_preds_wp1 <- group_by(boot2_preds_wp1, temp) %>%
+  dplyr::summarise(conf_lower = quantile(pred, 0.025),
+            conf_upper = quantile(pred, 0.975)) %>%
+  ungroup()
+
+# plot bootstrapped CIs
+ ggplot() +
+  geom_line(aes(temp, .fitted,group=bin), d_preds_list[[1]], col = 'blue') +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), boot2_conf_preds_wp1, fill = 'blue', alpha = 0.3) +
+  geom_point(aes(temp, cal.length), wp1, size = 2) +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Growth rate',
+       title = 'Growth rate across temperatures')
+ 
+boot2_conf_preds_wp1<-as.data.frame(boot2_conf_preds_wp1)
+boot2_conf_preds_wp1$pop<-"Willapa"
+boot2_conf_preds_wp1$bin<-1
+
+#wp2
+wp2<-wp%>%filter(bin==2)
+# refit model using nlsLM
+fit_nlsLM2_wp2 <- nlsLM(cal.length~rezende_2019(temp = temp, q10,a,b,c),
+                    data = wp2,
+                    start = coef(d_fit_boot_list[[2]]$rezende[[1]]),
+                    lower = get_lower_lims(wp2$temp, wp2$cal.length, model_name = 'rezende_2019'),
+                    upper = get_upper_lims(wp2$temp, wp2$cal.length, model_name = 'rezende_2019'),
+                    control = nls.lm.control(maxiter=500),
+                    weights = rep(1, times = nrow(wp2)))
+
+# bootstrap using case resampling
+boot1_wp2 <- Boot(fit_nlsLM2_wp2, method = 'case')
+
+# predict over new data
+boot2_preds_wp2 <- boot1_wp2$t %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  dplyr::mutate(iter = 1:n()) %>%
+  group_by_all() %>%
+  do(data.frame(temp = seq(min(wp2$temp), max(wp2$temp), length.out = 100))) %>%
+  ungroup() %>%
+  mutate(pred=rezende_2019(temp, q10, a,b,c))
+
+
+# calculate bootstrapped confidence intervals
+boot2_conf_preds_wp2 <- group_by(boot2_preds_wp2, temp) %>%
+  dplyr::summarise(conf_lower = quantile(pred, 0.025),
+            conf_upper = quantile(pred, 0.975)) %>%
+  ungroup()
+
+# plot bootstrapped CIs
+ ggplot() +
+  geom_line(aes(temp, .fitted,group=bin), d_preds_list[[2]], col = 'blue') +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), boot2_conf_preds_wp2, fill = 'blue', alpha = 0.3) +
+  geom_point(aes(temp, cal.length), wp2, size = 2) +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Growth rate',
+       title = 'Growth rate across temperatures')
+ 
+boot2_conf_preds_wp2<-as.data.frame(boot2_conf_preds_wp2)
+boot2_conf_preds_wp2$pop<-"Willapa"
+boot2_conf_preds_wp2$bin<-2
+
+#wp3
+wp3<-wp%>%filter(bin==3)
+
+
+# refit model using nlsLM
+fit_nlsLM2_wp3 <- nlsLM(cal.length~rezende_2019(temp = temp, q10,a,b,c),
+                    data = wp3,
+                    start = coef(d_fit_boot_list[[3]]$rezende[[1]]),
+                    lower = get_lower_lims(wp3$temp, wp3$cal.length, model_name = 'rezende_2019'),
+                    upper = get_upper_lims(wp3$temp, wp3$cal.length, model_name = 'rezende_2019'),
+                    control = nls.lm.control(maxiter=500),
+                    weights = rep(1, times = nrow(wp3)))
+
+# bootstrap using case resampling
+boot1_wp3 <- Boot(fit_nlsLM2_wp3, method = 'case')
+
+# predict over new data
+boot2_preds_wp3 <- boot1_wp3$t %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  dplyr::mutate(iter = 1:n()) %>%
+  group_by_all() %>%
+  do(data.frame(temp = seq(min(wp3$temp), max(wp3$temp), length.out = 100))) %>%
+  ungroup() %>%
+  mutate(pred=rezende_2019(temp, q10, a,b,c))
+
+
+# calculate bootstrapped confidence intervals
+boot2_conf_preds_wp3 <- group_by(boot2_preds_wp3, temp) %>%
+  dplyr::summarise(conf_lower = quantile(pred, 0.025),
+            conf_upper = quantile(pred, 0.975)) %>%
+  ungroup()
+
+# plot bootstrapped CIs
+ ggplot() +
+  geom_line(aes(temp, .fitted,group=bin), d_preds_list[[3]], col = 'blue') +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), boot2_conf_preds_wp3, fill = 'blue', alpha = 0.3) +
+  geom_point(aes(temp, cal.length), wp3, size = 2) +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Growth rate',
+       title = 'Growth rate across temperatures')
+ 
+boot2_conf_preds_wp3<-as.data.frame(boot2_conf_preds_wp3)
+boot2_conf_preds_wp3$pop<-"Willapa"
+boot2_conf_preds_wp3$bin<-3
+
+boot2_conf_preds_wp<-rbind(boot2_conf_preds_wp1,boot2_conf_preds_wp2,boot2_conf_preds_wp3)
+d_preds_list_wp<-rbind(d_preds_list[[1]],d_preds_list[[2]],d_preds_list[[3]])
+```
+# hm
+
+```{r}
+#hm1
+hm<-growth.alive%>%filter(pop=="Humboldt")
+hm<-na.omit(hm)
+hm<-data.frame("temp"=hm$temp,"cal.length"=hm$cal.length,"bin"=hm$bin,"pop"=hm$pop,"cal.length.start"=hm$cal.length.start)
+hm1<-hm%>%filter(bin==1)
+
+
+
+
+# refit model using nlsLM
+fit_nlsLM2_hm1 <- nlsLM(cal.length~rezende_2019(temp = temp, q10,a,b,c),
+                    data = hm1,
+                    start = coef(d_fit_boot_list[[4]]$rezende[[1]]),
+                    lower = get_lower_lims(hm1$temp, hm1$cal.length, model_name = 'rezende_2019'),
+                    upper = get_upper_lims(hm1$temp, hm1$cal.length, model_name = 'rezende_2019'),
+                    control = nls.lm.control(maxiter=500),
+                    weights = rep(1, times = nrow(hm1)))
+
+# bootstrap using case resampling
+boot1_hm1 <- Boot(fit_nlsLM2_hm1, method = 'case')
+
+# predict over new data
+boot2_preds_hm1 <- boot1_hm1$t %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  dplyr::mutate(iter = 1:n()) %>%
+  group_by_all() %>%
+  do(data.frame(temp = seq(min(hm1$temp), max(hm1$temp), length.out = 100))) %>%
+  ungroup() %>%
+  mutate(pred=rezende_2019(temp, q10, a,b,c))
+
+
+# calculate bootstrapped confidence intervals
+boot2_conf_preds_hm1 <- group_by(boot2_preds_hm1, temp) %>%
+  dplyr::summarise(conf_lower = quantile(pred, 0.025),
+            conf_upper = quantile(pred, 0.975)) %>%
+  ungroup()
+
+# plot bootstrapped CIs
+ ggplot() +
+  geom_line(aes(temp, .fitted,group=bin), d_preds_list[[4]], col = 'blue') +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), boot2_conf_preds_hm1, fill = 'blue', alpha = 0.3) +
+  geom_point(aes(temp, cal.length), hm1, size = 2) +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Growth rate',
+       title = 'Growth rate across temperatures')
+ 
+boot2_conf_preds_hm1<-as.data.frame(boot2_conf_preds_hm1)
+boot2_conf_preds_hm1$pop<-"Humboldt"
+boot2_conf_preds_hm1$bin<-1
+
+#hm2
+hm2<-hm%>%filter(bin==2)
+# refit model using nlsLM
+fit_nlsLM2_hm2 <- nlsLM(cal.length~rezende_2019(temp = temp, q10,a,b,c),
+                    data = hm2,
+                    start = coef(d_fit_boot_list[[5]]$rezende[[1]]),
+                    lower = get_lower_lims(hm2$temp, hm2$cal.length, model_name = 'rezende_2019'),
+                    upper = get_upper_lims(hm2$temp, hm2$cal.length, model_name = 'rezende_2019'),
+                    control = nls.lm.control(maxiter=500),
+                    weights = rep(1, times = nrow(hm2)))
+
+# bootstrap using case resampling
+boot1_hm2 <- Boot(fit_nlsLM2_hm2, method = 'case')
+
+# predict over new data
+boot2_preds_hm2 <- boot1_hm2$t %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  dplyr::mutate(iter = 1:n()) %>%
+  group_by_all() %>%
+  do(data.frame(temp = seq(min(hm2$temp), max(hm2$temp), length.out = 100))) %>%
+  ungroup() %>%
+  mutate(pred=rezende_2019(temp, q10, a,b,c))
+
+
+# calculate bootstrapped confidence intervals
+boot2_conf_preds_hm2 <- group_by(boot2_preds_hm2, temp) %>%
+  dplyr::summarise(conf_lower = quantile(pred, 0.025),
+            conf_upper = quantile(pred, 0.975)) %>%
+  ungroup()
+
+# plot bootstrapped CIs
+ ggplot() +
+  geom_line(aes(temp, .fitted,group=bin), d_preds_list[[5]], col = 'blue') +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), boot2_conf_preds_hm2, fill = 'blue', alpha = 0.3) +
+  geom_point(aes(temp, cal.length), hm2, size = 2) +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Growth rate',
+       title = 'Growth rate across temperatures')
+ 
+boot2_conf_preds_hm2<-as.data.frame(boot2_conf_preds_hm2)
+boot2_conf_preds_hm2$pop<-"Humboldt"
+boot2_conf_preds_hm2$bin<-2
+
+#hm3
+hm3<-hm%>%filter(bin==3)
+
+
+# refit model using nlsLM
+fit_nlsLM2_hm3 <- nlsLM(cal.length~rezende_2019(temp = temp, q10,a,b,c),
+                    data = hm3,
+                    start = coef(d_fit_boot_list[[6]]$rezende[[1]]),
+                    lower = get_lower_lims(hm3$temp, hm3$cal.length, model_name = 'rezende_2019'),
+                    upper = get_upper_lims(hm3$temp, hm3$cal.length, model_name = 'rezende_2019'),
+                    control = nls.lm.control(maxiter=500),
+                    weights = rep(1, times = nrow(hm3)))
+
+# bootstrap using case resampling
+boot1_hm3 <- Boot(fit_nlsLM2_hm3, method = 'case')
+
+# predict over new data
+boot2_preds_hm3 <- boot1_hm3$t %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  dplyr::mutate(iter = 1:n()) %>%
+  group_by_all() %>%
+  do(data.frame(temp = seq(min(hm3$temp), max(hm3$temp), length.out = 100))) %>%
+  ungroup() %>%
+  mutate(pred=rezende_2019(temp, q10, a,b,c))
+
+
+# calculate bootstrapped confidence intervals
+boot2_conf_preds_hm3 <- group_by(boot2_preds_hm3, temp) %>%
+  dplyr::summarise(conf_lower = quantile(pred, 0.025),
+            conf_upper = quantile(pred, 0.975)) %>%
+  ungroup()
+
+# plot bootstrapped CIs
+ ggplot() +
+  geom_line(aes(temp, .fitted,group=bin), d_preds_list[[6]], col = 'blue') +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), boot2_conf_preds_hm3, fill = 'blue', alpha = 0.3) +
+  geom_point(aes(temp, cal.length), hm3, size = 2) +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Growth rate',
+       title = 'Growth rate across temperatures')
+ 
+boot2_conf_preds_hm3<-as.data.frame(boot2_conf_preds_hm3)
+boot2_conf_preds_hm3$pop<-"Humboldt"
+boot2_conf_preds_hm3$bin<-3
+
+boot2_conf_preds_hm<-rbind(boot2_conf_preds_hm1,boot2_conf_preds_hm2,boot2_conf_preds_hm3)
+d_preds_list_hm<-rbind(d_preds_list[[4]],d_preds_list[[5]],d_preds_list[[6]])
+```
+
+```{r}
+conf_preds<-rbind(boot2_conf_preds_gb,boot2_conf_preds_wh,boot2_conf_preds_oy,boot2_conf_preds_bf,boot2_conf_preds_fb,boot2_conf_preds_sk,boot2_conf_preds_wp,boot2_conf_preds_hm)
+
+d_preds_all<-rbind(d_preds_list_gb,d_preds_list_wh,d_preds_list_oy,d_preds_list_bf,d_preds_list_fb,d_preds_list_sk,d_preds_list_wp,d_preds_list_hm)
+
+growth.alive<-growth.alive%>%
+  mutate(pop = fct_relevel(pop, 
+            "Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"))
+
+d_preds_all<-d_preds_all%>%
+  mutate(pop = fct_relevel(pop, 
+            "Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"))
+
+conf_preds<-conf_preds%>%
+  mutate(pop = fct_relevel(pop, 
+            "Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"))
+
+pop_labs <- c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA")
+names(pop_labs) <- c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt")
+
+
+ab<-ggplot() +
+  geom_line(aes(temp, .fitted,group=bin), d_preds_all,col="black") +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper,group=bin,fill=pop), conf_preds,  alpha = 0.3) +
+  geom_point(aes(temp, cal.length), growth.alive, size = 1.2) +
+  theme_bw(base_size = 12) +
+  labs(x = 'temperature (°C)',
+       y = 'growth rate (mm)')+facet_wrap(.~pop,labeller = labeller(pop=pop_labs),ncol=4)+ scale_fill_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","magenta","skyblue"),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+theme_classic()+theme(axis.title=element_text(family="Times New Roman",size=18),axis.text=element_text(family="Times New Roman",size=12),strip.text=element_text(family="Times New Roman",size=12))+
+  scale_x_continuous(breaks=c(16,20,24,26,28,30))+theme(legend.position = 'none')+ylim(0,6)+theme(strip.background = element_blank())
+
+#ggsave("rtpc_facet_glmm.tiff",dpi=1200)
+
+```
+
+# Plot those CI intervals
+
+```{r}
+####
+#extra_params_gb1 <- calc_params(fit_nlsLM2_gb1) %>%
+#  pivot_longer(everything(), names_to =  'param', values_to = 'estimate')
+#
+#
+#ci_extra_params_gb1 <- Boot(fit_nlsLM2_gb1, f = function(x){unlist(calc_params(x))}, labels = #names(calc_params(fit_nlsLM2_gb1)), R = 200, method = 'case') %>%
+#  confint(., method = 'bca') %>%
+#  as.data.frame() %>%
+#  
+#  rownames_to_column(., var = 'param') %>%
+#  mutate(method = 'case bootstrap')
+#  
+#ci_extra_params_gb1 <- left_join(ci_extra_params_gb1, extra_params_gb1)
+#ci_extra_params_gb1$code<-"gb1"
+#
+#####
+#extra_params_gb2 <- calc_params(fit_nlsLM2_gb2) %>%
+#  pivot_longer(everything(), names_to =  'param', values_to = 'estimate')
+#
+#
+#ci_extra_params_gb2 <- Boot(fit_nlsLM2_gb2, f = function(x){unlist(calc_params(x))}, labels = #names(calc_params(fit_nlsLM2_gb2)), R = 200, method = 'case') %>%
+#  confint(., method = 'bca') %>%
+#  as.data.frame() %>%
+#  
+#  rownames_to_column(., var = 'param') %>%
+#  mutate(method = 'case bootstrap')
+#  
+#ci_extra_params_gb2 <- left_join(ci_extra_params_gb2, extra_params_gb2)
+#ci_extra_params_gb2$code<-"gb2"
+#
+#####
+#extra_params_gb3 <- calc_params(fit_nlsLM2_gb3) %>%
+#  pivot_longer(everything(), names_to =  'param', values_to = 'estimate')
+#
+#
+#ci_extra_params_gb3 <- Boot(fit_nlsLM2_gb3, f = function(x){unlist(calc_params(x))}, labels = #names(calc_params(fit_nlsLM2_gb3)), R = 200, method = 'case') %>%
+#  confint(., method = 'bca') %>%
+#  as.data.frame() %>%
+#  
+#  rownames_to_column(., var = 'param') %>%
+#  mutate(method = 'case bootstrap')
+#  
+#ci_extra_params_gb3 <- left_join(ci_extra_params_gb3, extra_params_gb3)
+#ci_extra_params_gb3$code<-"gb3"
+#
+####
+#extra_params_wh1 <- calc_params(fit_nlsLM2_wh1) %>%
+#  pivot_longer(everything(), names_to =  'param', values_to = 'estimate')
+#
+#
+#ci_extra_params_wh1 <- Boot(fit_nlsLM2_wh1, f = function(x){unlist(calc_params(x))}, labels = #names(calc_params(fit_nlsLM2_wh1)), R = 200, method = 'case') %>%
+#  confint(., method = 'bca') %>%
+#  as.data.frame() %>%
+#  
+#  rownames_to_column(., var = 'param') %>%
+#  mutate(method = 'case bootstrap')
+#  
+#ci_extra_params_wh1 <- left_join(ci_extra_params_wh1, extra_params_wh1)
+#ci_extra_params_wh1$code<-"wh1"
+#
+#####
+#extra_params_wh2 <- calc_params(fit_nlsLM2_wh2) %>%
+#  pivot_longer(everything(), names_to =  'param', values_to = 'estimate')
+#
+#
+#ci_extra_params_wh2 <- Boot(fit_nlsLM2_wh2, f = function(x){unlist(calc_params(x))}, labels = #names(calc_params(fit_nlsLM2_wh2)), R = 200, method = 'case') %>%
+#  confint(., method = 'bca') %>%
+#  as.data.frame() %>%
+#  
+#  rownames_to_column(., var = 'param') %>%
+#  mutate(method = 'case bootstrap')
+#  
+#ci_extra_params_wh2 <- left_join(ci_extra_params_wh2, extra_params_wh2)
+#ci_extra_params_wh2$code<-"wh2"
+#
+#####
+#extra_params_wh3 <- calc_params(fit_nlsLM2_wh3) %>%
+#  pivot_longer(everything(), names_to =  'param', values_to = 'estimate')
+#
+#
+#ci_extra_params_wh3 <- Boot(fit_nlsLM2_wh3, f = function(x){unlist(calc_params(x))}, labels = #names(calc_params(fit_nlsLM2_wh3)), R = 200, method = 'case') %>%
+#  confint(., method = 'bca') %>%
+#  as.data.frame() %>%
+#  
+#  rownames_to_column(., var = 'param') %>%
+#  mutate(method = 'case bootstrap')
+#  
+#ci_extra_params_wh3 <- left_join(ci_extra_params_wh3, extra_params_wh3)
+#ci_extra_params_wh3$code<-"wh3"
+#
+####
+#extra_params_oy1 <- calc_params(fit_nlsLM2_oy1) %>%
+#  pivot_longer(everything(), names_to =  'param', values_to = 'estimate')
+#
+#
+#ci_extra_params_oy1 <- Boot(fit_nlsLM2_oy1, f = function(x){unlist(calc_params(x))}, labels = #names(calc_params(fit_nlsLM2_oy1)), R = 200, method = 'case') %>%
+#  confint(., method = 'bca') %>%
+#  as.data.frame() %>%
+#  
+#  rownames_to_column(., var = 'param') %>%
+#  mutate(method = 'case bootstrap')
+#  
+#ci_extra_params_oy1 <- left_join(ci_extra_params_oy1, extra_params_oy1)
+#ci_extra_params_oy1$code<-"oy1"
+#
+#####
+#extra_params_oy2 <- calc_params(fit_nlsLM2_oy2) %>%
+#  pivot_longer(everything(), names_to =  'param', values_to = 'estimate')
+#
+#
+#ci_extra_params_oy2 <- Boot(fit_nlsLM2_oy2, f = function(x){unlist(calc_params(x))}, labels = #names(calc_params(fit_nlsLM2_oy2)), R = 200, method = 'case') %>%
+#  confint(., method = 'bca') %>%
+#  as.data.frame() %>%
+#  
+#  rownames_to_column(., var = 'param') %>%
+#  mutate(method = 'case bootstrap')
+#  
+#ci_extra_params_oy2 <- left_join(ci_extra_params_oy2, extra_params_oy2)
+#ci_extra_params_oy2$code<-"oy2"
+#
+#####
+#extra_params_oy3 <- calc_params(fit_nlsLM2_oy3) %>%
+#  pivot_longer(everything(), names_to =  'param', values_to = 'estimate')
+#
+#
+#ci_extra_params_oy3 <- Boot(fit_nlsLM2_oy3, f = function(x){unlist(calc_params(x))}, labels = #names(calc_params(fit_nlsLM2_oy3)), R = 200, method = 'case') %>%
+#  confint(., method = 'bca') %>%
+#  as.data.frame() %>%
+#  
+#  rownames_to_column(., var = 'param') %>%
+#  mutate(method = 'case bootstrap')
+#  
+#ci_extra_params_oy3 <- left_join(ci_extra_params_oy3, extra_params_oy3)
+#ci_extra_params_oy3$code<-"oy3"
+#
+####
+#extra_params_bf1 <- calc_params(fit_nlsLM2_bf1) %>%
+#  pivot_longer(everything(), names_to =  'param', values_to = 'estimate')
+#
+#
+#ci_extra_params_bf1 <- Boot(fit_nlsLM2_bf1, f = function(x){unlist(calc_params(x))}, labels = #names(calc_params(fit_nlsLM2_bf1)), R = 200, method = 'case') %>%
+#  confint(., method = 'bca') %>%
+#  as.data.frame() %>%
+#  
+#  rownames_to_column(., var = 'param') %>%
+#  mutate(method = 'case bootstrap')
+#  
+#ci_extra_params_bf1 <- left_join(ci_extra_params_bf1, extra_params_bf1)
+#ci_extra_params_bf1$code<-"bf1"
+#
+#####
+#extra_params_bf2 <- calc_params(fit_nlsLM2_bf2) %>%
+#  pivot_longer(everything(), names_to =  'param', values_to = 'estimate')
+#
+#
+#ci_extra_params_bf2 <- Boot(fit_nlsLM2_bf2, f = function(x){unlist(calc_params(x))}, labels = #names(calc_params(fit_nlsLM2_bf2)), R = 200, method = 'case') %>%
+#  confint(., method = 'bca') %>%
+#  as.data.frame() %>%
+#  
+#  rownames_to_column(., var = 'param') %>%
+#  mutate(method = 'case bootstrap')
+#  
+#ci_extra_params_bf2 <- left_join(ci_extra_params_bf2, extra_params_bf2)
+#ci_extra_params_bf2$code<-"bf2"
+#
+#####
+#extra_params_bf3 <- calc_params(fit_nlsLM2_bf3) %>%
+#  pivot_longer(everything(), names_to =  'param', values_to = 'estimate')
+#
+#
+#ci_extra_params_bf3 <- Boot(fit_nlsLM2_bf3, f = function(x){unlist(calc_params(x))}, labels = #names(calc_params(fit_nlsLM2_bf3)), R = 200, method = 'case') %>%
+#  confint(., method = 'bca') %>%
+#  as.data.frame() %>%
+#  
+#  rownames_to_column(., var = 'param') %>%
+#  mutate(method = 'case bootstrap')
+#  
+#ci_extra_params_bf3 <- left_join(ci_extra_params_bf3, extra_params_bf3)
+#ci_extra_params_bf3$code<-"bf3"
+#
+####
+#extra_params_fb1 <- calc_params(fit_nlsLM2_fb1) %>%
+#  pivot_longer(everything(), names_to =  'param', values_to = 'estimate')
+#
+#
+#ci_extra_params_fb1 <- Boot(fit_nlsLM2_fb1, f = function(x){unlist(calc_params(x))}, labels = #names(calc_params(fit_nlsLM2_fb1)), R = 200, method = 'case') %>%
+#  confint(., method = 'bca') %>%
+#  as.data.frame() %>%
+#  
+#  rownames_to_column(., var = 'param') %>%
+#  mutate(method = 'case bootstrap')
+#  
+#ci_extra_params_fb1 <- left_join(ci_extra_params_fb1, extra_params_fb1)
+#ci_extra_params_fb1$code<-"fb1"
+#
+#####
+#extra_params_fb2 <- calc_params(fit_nlsLM2_fb2) %>%
+#  pivot_longer(everything(), names_to =  'param', values_to = 'estimate')
+#
+#
+#ci_extra_params_fb2 <- Boot(fit_nlsLM2_fb2, f = function(x){unlist(calc_params(x))}, labels = #names(calc_params(fit_nlsLM2_fb2)), R = 200, method = 'case') %>%
+#  confint(., method = 'bca') %>%
+#  as.data.frame() %>%
+#  
+#  rownames_to_column(., var = 'param') %>%
+#  mutate(method = 'case bootstrap')
+#  
+#ci_extra_params_fb2 <- left_join(ci_extra_params_fb2, extra_params_fb2)
+#ci_extra_params_fb2$code<-"fb2"
+#
+#####
+#extra_params_fb3 <- calc_params(fit_nlsLM2_fb3) %>%
+#  pivot_longer(everything(), names_to =  'param', values_to = 'estimate')
+#
+#
+#ci_extra_params_fb3 <- Boot(fit_nlsLM2_fb3, f = function(x){unlist(calc_params(x))}, labels = #names(calc_params(fit_nlsLM2_fb3)), R = 200, method = 'case') %>%
+#  confint(., method = 'bca') %>%
+#  as.data.frame() %>%
+#  
+#  rownames_to_column(., var = 'param') %>%
+#  mutate(method = 'case bootstrap')
+#  
+#ci_extra_params_fb3 <- left_join(ci_extra_params_fb3, extra_params_fb3)
+#ci_extra_params_fb3$code<-"fb3"
+#
+####
+#extra_params_sk1 <- calc_params(fit_nlsLM2_sk1) %>%
+#  pivot_longer(everything(), names_to =  'param', values_to = 'estimate')
+#
+#
+#ci_extra_params_sk1 <- Boot(fit_nlsLM2_sk1, f = function(x){unlist(calc_params(x))}, labels = #names(calc_params(fit_nlsLM2_sk1)), R = 200, method = 'case') %>%
+#  confint(., method = 'bca') %>%
+#  as.data.frame() %>%
+#  
+#  rownames_to_column(., var = 'param') %>%
+#  mutate(method = 'case bootstrap')
+#  
+#ci_extra_params_sk1 <- left_join(ci_extra_params_sk1, extra_params_sk1)
+#ci_extra_params_sk1$code<-"sk1"
+#
+#####
+#extra_params_sk2 <- calc_params(fit_nlsLM2_sk2) %>%
+#  pivot_longer(everything(), names_to =  'param', values_to = 'estimate')
+#
+#
+#ci_extra_params_sk2 <- Boot(fit_nlsLM2_sk2, f = function(x){unlist(calc_params(x))}, labels = #names(calc_params(fit_nlsLM2_sk2)), R = 200, method = 'case') %>%
+#  confint(., method = 'bca') %>%
+#  as.data.frame() %>%
+#  
+#  rownames_to_column(., var = 'param') %>%
+#  mutate(method = 'case bootstrap')
+#  
+#ci_extra_params_sk2 <- left_join(ci_extra_params_sk2, extra_params_sk2)
+#ci_extra_params_sk2$code<-"sk2"
+#
+#####
+#extra_params_sk3 <- calc_params(fit_nlsLM2_sk3) %>%
+#  pivot_longer(everything(), names_to =  'param', values_to = 'estimate')
+#
+#
+#ci_extra_params_sk3 <- Boot(fit_nlsLM2_sk3, f = function(x){unlist(calc_params(x))}, labels = #names(calc_params(fit_nlsLM2_sk3)), R = 200, method = 'case') %>%
+#  confint(., method = 'bca') %>%
+#  as.data.frame() %>%
+#  
+#  rownames_to_column(., var = 'param') %>%
+#  mutate(method = 'case bootstrap')
+#  
+#ci_extra_params_sk3 <- left_join(ci_extra_params_sk3, extra_params_sk3)
+#ci_extra_params_sk3$code<-"sk3"
+#
+####
+#extra_params_wp1 <- calc_params(fit_nlsLM2_wp1) %>%
+#  pivot_longer(everything(), names_to =  'param', values_to = 'estimate')
+#
+#
+#ci_extra_params_wp1 <- Boot(fit_nlsLM2_wp1, f = function(x){unlist(calc_params(x))}, labels = #names(calc_params(fit_nlsLM2_wp1)), R = 200, method = 'case') %>%
+#  confint(., method = 'bca') %>%
+#  as.data.frame() %>%
+#  
+#  rownames_to_column(., var = 'param') %>%
+#  mutate(method = 'case bootstrap')
+#  
+#ci_extra_params_wp1 <- left_join(ci_extra_params_wp1, extra_params_wp1)
+#ci_extra_params_wp1$code<-"wp1"
+#
+#####
+#extra_params_wp2 <- calc_params(fit_nlsLM2_wp2) %>%
+#  pivot_longer(everything(), names_to =  'param', values_to = 'estimate')
+#
+#
+#ci_extra_params_wp2 <- Boot(fit_nlsLM2_wp2, f = function(x){unlist(calc_params(x))}, labels = #names(calc_params(fit_nlsLM2_wp2)), R = 200, method = 'case') %>%
+#  confint(., method = 'bca') %>%
+#  as.data.frame() %>%
+#  
+#  rownames_to_column(., var = 'param') %>%
+#  mutate(method = 'case bootstrap')
+#  
+#ci_extra_params_wp2 <- left_join(ci_extra_params_wp2, extra_params_wp2)
+#ci_extra_params_wp2$code<-"wp2"
+#
+#####
+#extra_params_wp3 <- calc_params(fit_nlsLM2_wp3) %>%
+#  pivot_longer(everything(), names_to =  'param', values_to = 'estimate')
+#
+#
+#ci_extra_params_wp3 <- Boot(fit_nlsLM2_wp3, f = function(x){unlist(calc_params(x))}, labels = #names(calc_params(fit_nlsLM2_wp3)), R = 200, method = 'case') %>%
+#  confint(., method = 'bca') %>%
+#  as.data.frame() %>%
+#  
+#  rownames_to_column(., var = 'param') %>%
+#  mutate(method = 'case bootstrap')
+#  
+#ci_extra_params_wp3 <- left_join(ci_extra_params_wp3, extra_params_wp3)
+#ci_extra_params_wp3$code<-"wp3"
+#
+####
+#extra_params_hm1 <- calc_params(fit_nlsLM2_hm1) %>%
+#  pivot_longer(everything(), names_to =  'param', values_to = 'estimate')
+#
+#
+#ci_extra_params_hm1 <- Boot(fit_nlsLM2_hm1, f = function(x){unlist(calc_params(x))}, labels = #names(calc_params(fit_nlsLM2_hm1)), R = 200, method = 'case') %>%
+#  confint(., method = 'bca') %>%
+#  as.data.frame() %>%
+#  
+#  rownames_to_column(., var = 'param') %>%
+#  mutate(method = 'case bootstrap')
+#  
+#ci_extra_params_hm1 <- left_join(ci_extra_params_hm1, extra_params_hm1)
+#ci_extra_params_hm1$code<-"hm1"
+#
+#####
+#extra_params_hm2 <- calc_params(fit_nlsLM2_hm2) %>%
+#  pivot_longer(everything(), names_to =  'param', values_to = 'estimate')
+#
+#
+#ci_extra_params_hm2 <- Boot(fit_nlsLM2_hm2, f = function(x){unlist(calc_params(x))}, labels = #names(calc_params(fit_nlsLM2_hm2)), R = 200, method = 'case') %>%
+#  confint(., method = 'bca') %>%
+#  as.data.frame() %>%
+#  
+#  rownames_to_column(., var = 'param') %>%
+#  mutate(method = 'case bootstrap')
+#  
+#ci_extra_params_hm2 <- left_join(ci_extra_params_hm2, extra_params_hm2)
+#ci_extra_params_hm2$code<-"hm2"
+#
+#####
+#extra_params_hm3 <- calc_params(fit_nlsLM2_hm3) %>%
+#  pivot_longer(everything(), names_to =  'param', values_to = 'estimate')
+#
+#
+#ci_extra_params_hm3 <- Boot(fit_nlsLM2_hm3, f = function(x){unlist(calc_params(x))}, labels = #names(calc_params(fit_nlsLM2_hm3)), R = 200, method = 'case') %>%
+#  confint(., method = 'bca') %>%
+#  as.data.frame() %>%
+#  
+#  rownames_to_column(., var = 'param') %>%
+#  mutate(method = 'case bootstrap')
+#  
+#ci_extra_params_hm3 <- left_join(ci_extra_params_hm3, extra_params_hm3)
+#ci_extra_params_hm3$code<-"hm3"
+
+```
+
+```{r}
+#ci_extra_params_all<-rbind(ci_extra_params_gb1,ci_extra_params_wh1,ci_extra_params_oy1,ci_extra_params_bf1,ci_extra_params_fb1,ci_extra_params_sk1,ci_extra_params_wp1,ci_extra_params_hm1,ci_extra_params_gb2,ci_extra_params_wh2,ci_extra_params_oy2,ci_extra_params_bf2,ci_extra_params_fb2,ci_extra_params_sk2,ci_extra_params_wp2,ci_extra_params_hm2,ci_extra_params_gb3,ci_extra_params_wh3,ci_extra_params_oy3,ci_extra_params_bf3,ci_extra_params_fb3,ci_extra_params_sk3,ci_extra_params_wp3,ci_extra_params_hm3)
+
+#write.csv(ci_extra_params_all,"C:/Users/drewv/Documents/UMASS/data/Uro_ch_2/data/ci_extra_params_all_glmm.csv",row.names=T)
+
+ci_extra_params_all<-read.csv(here::here("data/ci_extra_params_all.csv"))
+
+rmax<-filter(ci_extra_params_all,param=="rmax")
+rmax$site<-rmax$code
+rmax<-rmax[,c(2:4,6,8:10)]
+rmax$site<-rmax$code
+topt<-filter(ci_extra_params_all,param=="topt")
+topt$site<-topt$code
+topt<-topt[,c(2:4,6,8:10)]
+
+#write.csv(rmax,"C:/Users/drewv/Documents/UMASS/Urosalpinx/TPC_MS_updated_tables/glmm/rmax.csv",row.names=T)
+
+#write.csv(topt,"C:/Users/drewv/Documents/UMASS/Urosalpinx/TPC_MS_updated_tables/glmm/topt.csv",row.names=T)
+
+
+```

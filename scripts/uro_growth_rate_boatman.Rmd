@@ -1,0 +1,2102 @@
+---
+title: "Urosalpinx growth rate (length)"
+author: "Andrew Villeneuve"
+date: "5/26/2020"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+
+
+# The Study - read first 
+
+For this part of the study, we measured growth rates of juvenile Urosalpinx snails. We measured snail length using ImageJ within two days of hatching, and grew them in tea strainers separated by population for 24 days in a common garden experiment. Nine replicates per population were distributed in six temperatures, with three groups of three subreplicates in each temperature/population treatment. Snails were given food ad libitum. The end length was recorded using digital calipers after 24 days, and we subtracted the starting length from the beginning length to get the growth rate (over 24 days; see data exploration for reasoning). From this growth data, we can create thermal performance curves (TPCs) for each population to show the growth response of Urosaplinx populations to a range of laboratory temperatures.
+
+The analysis of these growth curves requires two steps: 
+
+1) the creation of models that describe the curved TPC shape using segmented and quadratic models and
+
+2) the extraction of breakpoints (thermal optima = x breakpoint, maximal trait performance = y optima) for each population's TPC and modeling which environmental factors best describe any patterns in these optima across populations. I do this across two methods - segmented and quadratic regression. We want to see if both methods give approximately the same results, and based on model outputs decide which method we should use.
+
+These two steps are presented, separately, in the Data Analysis section. The organization of these analyses thusly:
+
+* Broken stick regression - I create, analyze, and plot segmented regressions 
+  * Breakpoint analysis, broken stick - I extract the thermal optima (x brkpt) and maximal trait performance (y brkpt) of each population's segmented regression
+
+* Quadratic model - I create, analyze, and plot quadratic regressions. 
+  * Breakpoint analysis, quadratic - I extract the thermal optima (x brkpt) and maximal trait performance (y brkpt) of each population's quadratic regression
+  
+
+# Metadata
+
+* code
+
+  * Unique code for each indiviudal snail, corresponding to population, temperature treatment. First digit = temperature (1=16,2=20,3=24,4=26, 5=28, 6=30), second digit =  site (1=Willapa, 2=Humboldt, 3=Great Bay, 4=Woods Hole, 5=Oyster, 6=Beaufort, 7=Folly Beach, 8=Skidaway), third digit = tupperware bin number (1-3), fourth digit = snail replicate (1-3)
+
+* pop
+
+  * Source population of each snail. See data table below for list of site abbreivations with site. 
+
+* temp
+
+  * Common garden temperature the snails were raised in for 24 days. Degrees C
+
+* hatch
+
+  * hatch date of each snail from it's egg case (m/dd/yyyy)
+
+* exp.date
+
+  * Date on which hatchling snails were placed in the common garden experiment. Not more then 2 days from the hatch date. (m/dd/yyyy)
+
+* grow.date
+
+  * End date where growth measurements were taken. 24 days after exp.date, therefore no more then 26 days post hatch (m/dd/yyyy)
+
+* alive
+
+  * Tracks if snails survived the experient. m marks missing, n marks no, y marks yes
+
+* rem.oysters
+
+  * Was there a surplus of food at the end of the experiment? n marks no, y marks yes
+
+* cal.length.start
+
+  * caliper length of hatchlings upon entering the experment. We took photos of snails before entering snails into the experiment, and then used ImageJ to extract snail sizes. Size in mm
+
+* cal.length.end
+
+  * caliper length of hatchling at the end of the experiemnt. We took caliper measurements of the snails, as well as verifying the measurements using a subset of photographs in ImageJ. Size in mm
+
+* wt
+
+  * End weight of snail. Note that no initial starting weight was recorded. Weight in g.
+
+* ran.out
+
+  * Did the snail ever run out of food during the consumption experiment? 1 for yes, 0 for no
+
+* bin
+
+  * Bin number, controls subreplication. The third digit of the code. 
+
+* oce
+
+  * Ocean (Atlantic or Pacific)
+
+```{r,echo=F, warning=F}
+data.frame("site abbreviation" = c("gb","wh","oy","bf","fb","gcsk","nah1516","hmi2"), "site"=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"))
+
+
+```
+
+# Data Setup
+
+
+```{r setup, include=FALSE,echo=F}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(rmarkdown)
+library(dplyr)
+library(ggplot2)
+library(forcats)
+library(PerformanceAnalytics)
+library(sjPlot)
+library(lubridate)
+library(HH)
+library(AICcmodavg)
+library(MuMIn)
+library(ggiraphExtra)
+library(extrafont)
+library(here)
+library(lubridate)
+library(plyr)
+library(tidyr)
+library(digest)
+library(ggnewscale)
+library(glmmTMB)
+library(rTPC)
+library(nls.multstart)
+loadfonts(device = "win")
+
+
+growth<-read.csv(here::here("data/growth_test.csv"))
+summary(growth)
+#identify and edit errors that are most certainly due to neglecting a 0 in data entry.
+
+which(growth$wt>0.09)
+growth[92,12]=0.0109
+growth[193,12]=.0151
+growth[232,12]=.023
+growth[268,12]=.0261
+
+#Let's bring in the consumption data, and see which snails ran out of food MORE than once. We will keep snails that ran out only once. 
+
+cons<-read.csv(here::here("data/uro.consumption2.csv"))
+cons<-na.omit(cons)
+
+cons$allcons<-ifelse(cons$all.consumed=="n","0",ifelse(cons$all.consumed=="y","1",NA))
+cons$allcons<-as.numeric(cons$allcons)
+
+consfilter<-cons%>%filter(all.consumed!="n")%>%group_by(TPC.Label)%>%dplyr::summarise(n=n())
+consfilter$TPC.Label<-as.character(consfilter$TPC.Label)
+
+
+#when did snails die, timepoint wise?
+conscase<-cons%>%filter(all.consumed!="n")%>%group_by(timepoint)%>%dplyr::summarise(n=n())
+conscase$n<-as.integer(conscase$n)
+
+
+#only 6212 ran out twice. Below we remove it. If we wanted to do all the snails that ran out, we would run the next line
+growth.alive<-subset(growth,code!=(6212))
+##this below not only eliminates snails who ran out of food, but also
+###eliminate snails that ever ran out of food
+##step beyod simply removing measurements when snails ran out of food. 
+#growth.alive<-subset(growth,code!=(6833)&code!=(6831)&code!=(6711)&code!=(6632)&code!=(6631)&code!=(6611)&code!=(6433)&code!=(6422)&code!=(6412)&code!=(6411)&code!=(6233)&code!=(6212)&code!=(6212)&code!=(6111)&code!=(5831)&code!=(5813)&code!=(5732)&code!=(5731)&code!=(5723)&code!=(5711)&code!=(5622)&code!=(5531)&code!=(5333)&code!=(5313)&code!=(5312)&code!=(5213)&code!=(5121)&code!=(5112)&code!=(4522)&code!=(4521)&code!=(4433)&code!=(4432)&code!=(4231)&code!=(3821)&code!=(3712)&code!=(3433)&code!=(3432)&code!=(3421)&code!=(3413)&code!=(2422)&code!=(2421)&code!=(6832))
+
+#how many died? 37
+dead<-growth.alive%>%filter(alive=="n")%>%group_by(temp)%>%dplyr::summarise(n=n())
+
+deadpop<-growth.alive%>%filter(alive=="n")%>%group_by(pop)%>%dplyr::summarise(n=n())
+
+#how many disappeared/unknown?
+dis<-growth.alive%>%filter(alive=="m")%>%dplyr::summarise(n=n())
+
+
+
+##eliminate all snails that died/unknown. "n" = died, "m' = unknown (escaped, crushed, etc. ) 
+growth.alive<-growth.alive[!(growth.alive$alive=="n"),]
+growth.alive<-growth.alive[!(growth.alive$alive=="m"),]
+growth.alive<-tidyr::drop_na(growth.alive)
+
+
+##temperature data
+
+#gb
+gb<-read.csv(here::here("test_env/gb/GRBGBWQ.csv"))
+gb<-gb[,c(3,7)]
+gb$rdate<-as.POSIXct(gb$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+gb<-na.omit(gb)
+gb$WTMP<-gb$Temp
+gb<-gb[,c(3,4)]
+gb16<-filter(gb,rdate>"2016-01-01 00:00:00" & rdate< "2016-12-31 00:00:00")
+gb18<-filter(gb,rdate>"2018-01-01 00:00:00" & rdate< "2018-12-31 00:00:00")
+gb14<-filter(gb,rdate>"2014-01-01 00:00:00" & rdate< "2014-12-31 00:00:00")
+gb15<-filter(gb,rdate>"2015-01-01 00:00:00" & rdate< "2015-12-31 00:00:00")
+gb<-rbind(gb14,gb15,gb16,gb18)
+gb$site<-"gb"
+
+#wh - P is 0.06 with this measurement, but more like 0.123 when we do it with the farther away source. 
+wh2019<-read.delim(here::here("test_env/wh/bzbm3h2019.txt"),sep = "", dec = ".")
+wh2018<-read.delim(here::here("test_env/wh/bzbm3h2018.txt"),sep = "", dec = ".")
+wh2017<-read.delim(here::here("test_env/wh/bzbm3h2017.txt"),sep = "", dec = ".")
+wh2016<-read.delim(here::here("test_env/wh/bzbm3h2016.txt"),sep = "", dec = ".")
+
+
+wh<-rbind(wh2019,wh2018,wh2017,wh2016)
+wh<-wh[,c(1:5,15)]
+wh<-wh%>%unite("date",c(2:3,1),sep="/")
+wh<-wh%>%unite("time",c(2:3),sep=":")
+wh<-wh%>%unite("DateTimeStamp", c(1:2),sep="")
+
+wh$rdate<-as.POSIXct(wh$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+wh<-wh[-1,]
+wh$site<-"wh"
+wh<-wh%>%filter(WTMP!="degC")
+wh<-wh%>%filter(WTMP!="999.0")
+wh$WTMP<-as.numeric(wh$WTMP)
+wh<-wh[,2:4]
+
+#wh<-read.csv(here::here("test_env/wh/WQBMHWQ.csv"))
+#wh<-wh[,c(3,7)]
+#wh$rdate<-as.POSIXct(wh$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+#wh<-na.omit(wh)
+#wh$WTMP<-wh$Temp
+#wh<-wh[,c(3,4)]
+#wh$site<-"wh"
+#wh<-wh%>%filter(rdate>="2016-01-01"&rdate<="2019-12-31")
+
+#oy
+oy<-read.csv(here::here("test_env/oy/oy.csv"))
+oy$site<-"oy"
+oy$DATE<-as.POSIXct(oy$DATE,tz="", "%d%b%Y")
+#time is not possible :(
+oy$WTMP<-oy$WTEMP
+oy$rdate<-oy$DATE
+oy<-oy[,-c(1:6)]
+oy$WTMP<-as.numeric(oy$WTMP)
+oy<-oy%>%filter(rdate >= "2016-01-01" & rdate<="2019-12-31")
+oy<-na.omit(oy)
+
+#bf
+bf2019<-read.delim(here::here("test_env/bf/bftn7h2019.txt"),sep = "", dec = ".")
+bf2018<-read.delim(here::here("test_env/bf/bftn7h2018.txt"),sep = "", dec = ".")
+bf2017<-read.delim(here::here("test_env/bf/bftn7h2017.txt"),sep = "", dec = ".")
+bf2016<-read.delim(here::here("test_env/bf/bftn7h2016.txt"),sep = "", dec = ".")
+
+bf<-rbind(bf2019,bf2018,bf2017,bf2016)
+bf<-bf[,c(1:5,15)]
+bf<-bf%>%unite("date",c(2:3,1),sep="/")
+bf<-bf%>%unite("time",c(2:3),sep=":")
+bf<-bf%>%unite("DateTimeStamp", c(1:2),sep="")
+
+bf$rdate<-as.POSIXct(bf$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+bf<-bf[-1,]
+bf$site<-"bf"
+bf<-bf%>%filter(WTMP!="degC")
+bf<-bf%>%filter(WTMP!="999.0")
+bf$WTMP<-as.numeric(bf$WTMP)
+
+#fb
+fb2019<-read.delim(here::here("test_env/fb/chts1h2019.txt"),sep = "", dec = ".")
+fb2018<-read.delim(here::here("test_env/fb/chts1h2018.txt"),sep = "", dec = ".")
+fb2017<-read.delim(here::here("test_env/fb/chts1h2017.txt"),sep = "", dec = ".")
+fb2016<-read.delim(here::here("test_env/fb/chts1h2016.txt"),sep = "", dec = ".")
+
+fb<-rbind(fb2019,fb2018,fb2017,fb2016)
+fb<-fb[,c(1:5,15)]
+fb<-fb%>%unite("date",c(2:3,1),sep="/")
+fb<-fb%>%unite("time",c(2:3),sep=":")
+fb<-fb%>%unite("DateTimeStamp", c(1:2),sep="")
+
+fb$rdate<-as.POSIXct(fb$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+fb<-fb[-1,]
+fb$site<-"fb"
+fb<-fb%>%filter(WTMP!="degC")
+fb<-fb%>%filter(WTMP!="999.0")
+fb$WTMP<-as.numeric(fb$WTMP)
+
+#sk
+sk<-read.csv(here::here("test_env/sk/SAPDCWQ.csv"))
+sk<-sk[,c(3,7)]
+
+sk$rdate<-as.POSIXct(sk$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+sk$WTMP<-sk$Temp
+sk$WTMP<-as.numeric(sk$WTMP)
+sk_15<-filter(sk,rdate>"2015-01-01 00:00:00" & rdate< "2015-12-31 00:00:00")
+sk_18<-filter(sk,rdate>"2017-01-01 00:00:00" & rdate< "2019-12-31 00:00:00")
+sk<-rbind(sk_15,sk_18)
+sk<-na.omit(sk)
+
+#wp
+wp<-read.csv(here::here("test_env/wp/wp.csv"))
+wp$rdate<-as.POSIXct(wp$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+wp$WTMP<-as.numeric(wp$WTMP)
+ggplot(wp,aes(x=rdate,y=WTMP))+geom_point()
+mean(wp$WTMP,na.rm=T)
+max(wp$WTMP,na.rm=T)
+
+nah1<-filter(wp,rdate>"2014-01-01 00:00:00" & rdate< "2014-12-31 00:00:00")
+nah2<-filter(wp,rdate>"2017-01-01 00:00:00"&rdate< "2017-12-31 00:00:00")
+nah3<-filter(wp,rdate>"2019-01-01 00:00:00"&rdate< "2019-12-31 00:00:00")
+nah4<-filter(wp,rdate>"2012-01-01 00:00:00"&rdate< "2012-12-31 00:00:00")
+wp<-rbind(nah1,nah2,nah3,nah4)
+
+#hm
+#2014
+wiyot2014<-read.csv(here::here("test_env/hm/wiyot2014.csv"),header=T)
+wiyot2014<-wiyot2014%>%filter(str_detect(Sample..,"\\d"))
+wiyot2014<-wiyot2014%>%filter(!str_detect(Sample..,"Daylight"))
+wiyot2014<-wiyot2014%>%filter(!str_detect(Sample..,"Chlorophyll"))
+wiyot2014<-wiyot2014%>%filter(!str_detect(Sample..,"Max"))
+wiyot2014<-wiyot2014%>%unite("DateTimeStamp",c(2:4))
+wiyot2014<-wiyot2014%>%unite("WTMP",c(5:7))
+wiyot2014$WTMP<-gsub("_","",as.character(wiyot2014$WTMP))
+wiyot2014$DateTimeStamp<-gsub("_","",as.character(wiyot2014$DateTimeStamp))
+wiyot2014<-wiyot2014[,c(2,5)]
+wiyot2014$site<-"hm"
+wiyot2014$rdate<-as.POSIXct(wiyot2014$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+wiyot2014<-wiyot2014[,c(2:4)]
+wiyot2014$WTMP<-as.numeric(wiyot2014$WTMP)
+
+#2013
+wiyot2013<-read.csv(here::here("test_env/hm/wiyot2013.csv"),header=T)
+wiyot2013<-wiyot2013%>%filter(str_detect(sonde..3,"\\d"))
+wiyot2013<-wiyot2013%>%filter(!str_detect(sonde..3,"sonde"))
+wiyot2013<-wiyot2013%>%filter(!str_detect(sonde..3,"Daylight"))
+wiyot2013<-wiyot2013%>%filter(!str_detect(sonde..3,"Chlorophyll"))
+wiyot2013<-wiyot2013%>%unite("DateTimeStamp",c(3:5))
+wiyot2013<-wiyot2013%>%unite("WTMP",c(4:6))
+wiyot2013$WTMP<-gsub("_","",as.character(wiyot2013$WTMP))
+wiyot2013$DateTimeStamp<-gsub("_","",as.character(wiyot2013$DateTimeStamp))
+wiyot2013$WTMP<-gsub("NA","",as.character(wiyot2013$WTMP))
+wiyot2013$WTMP<-as.numeric(wiyot2013$WTMP)
+wiyot2013<-wiyot2013[,c(3,4)]
+wiyot2013$rdate<-as.POSIXct(wiyot2013$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+wiyot2013<-wiyot2013[,c(2:3)]
+wiyot2013$site<-"hm"
+
+#2012
+wiyot2012<-read.csv(here::here("test_env/hm/wiyot2012.csv"),header=T)
+wiyot2012<-wiyot2012%>%filter(str_detect(sonde..3,"\\d"))
+wiyot2012<-wiyot2012%>%filter(!str_detect(sonde..3,"sonde"))
+wiyot2012<-wiyot2012%>%filter(!str_detect(sonde..3,"Daylight"))
+wiyot2012<-wiyot2012[,c(2,3)]
+wiyot2012$rdate<-as.POSIXct(wiyot2012$X,tz="", "%m/%d/%Y%H:%M")
+wiyot2012$WTMP<-wiyot2012$Indian.Island.Long.Term.Deployment..Water.Quality.Data
+wiyot2012<-wiyot2012[,c(3,4)]
+wiyot2012$WTMP<-as.numeric(wiyot2012$WTMP)
+wiyot2012$site<-"hm"
+#2016
+wiyot2016<-read.csv(here::here("test_env/hm/wiyot2016.csv"),header=T)
+wiyot2016<-wiyot2016%>%filter(str_detect(sonde..2,"\\d"))
+wiyot2016<-wiyot2016%>%filter(!str_detect(sonde..2,"Daylight"))
+wiyot2016<-wiyot2016%>%unite("DateTimeStamp",c(2:3))
+wiyot2016<-wiyot2016%>%unite("WTMP",c(4:9))
+
+wiyot2016<-wiyot2016[,c(2,4)]
+wiyot2016$DateTimeStamp<-gsub("_","",as.character(wiyot2016$DateTimeStamp))
+wiyot2016$WTMP<-gsub("_","",as.character(wiyot2016$WTMP))
+wiyot2016$rdate<-as.POSIXct(wiyot2016$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+wiyot2016$site<-"hm"
+wiyot2016<-wiyot2016[,c(2:4)]
+wiyot2016$WTMP<-as.numeric(wiyot2016$WTMP)
+
+hm<-rbind(wiyot2016,wiyot2014,wiyot2013,wiyot2012)
+hm<-na.omit(hm)
+
+```
+
+```{r,echo=F,include=F}
+#create objects of tempreatures during summer only 
+s.gb<-gb%>%filter(rdate >= as.Date(paste(year(rdate), 06, 01, sep = "-")), rdate <= as.Date(paste(year(rdate), 09, 30, sep = "-")))
+s.wh<-wh%>%filter(rdate >= as.Date(paste(year(rdate), 06, 01, sep = "-")), rdate <= as.Date(paste(year(rdate), 09, 30, sep = "-")))
+s.oy<-oy%>%filter(rdate >= as.Date(paste(year(rdate), 06, 01, sep = "-")), rdate <= as.Date(paste(year(rdate), 09, 30, sep = "-")))
+s.bf<-bf%>%filter(rdate >= as.Date(paste(year(rdate), 06, 01, sep = "-")), rdate <= as.Date(paste(year(rdate), 09, 30, sep = "-")))
+s.fb<-fb%>%filter(rdate >= as.Date(paste(year(rdate), 06, 01, sep = "-")), rdate <= as.Date(paste(year(rdate), 09, 30, sep = "-")))
+s.hm<-hm%>%filter(rdate >= as.Date(paste(year(rdate), 06, 01, sep = "-")), rdate <= as.Date(paste(year(rdate), 09, 30, sep = "-")))
+s.wp<-wp%>%filter(rdate >= as.Date(paste(year(rdate), 06, 01, sep = "-")), rdate <= as.Date(paste(year(rdate), 09, 30, sep = "-")))
+s.sk<-sk%>%filter(rdate >= as.Date(paste(year(rdate), 06, 01, sep = "-")), rdate <= as.Date(paste(year(rdate), 09, 30, sep = "-")))
+
+##Quartiles
+q<-data.frame("site" = c("gb","wh","oy","bf","fb","wp","hm","sk"),"quantile"=NA,"decile"=NA, "max"=NA, "mean"=NA,"summer mean"=NA,"seasonlength10"=NA,"seasonlength12"=NA,"spring_start"=NA,"spring_max"=NA)
+q[1,2]<-quantile(s.gb$WTMP,0.75,type=1)
+q[2,2]<-quantile(s.wh$WTMP,0.75,type=1)
+q[3,2]<-quantile(s.oy$WTMP,0.75,type=1)
+q[4,2]<-quantile(s.bf$WTMP,0.75,type=1)
+q[5,2]<-quantile(s.fb$WTMP,0.75,type=1)
+q[6,2]<-quantile(s.wp$WTMP,0.75,type=1)
+q[7,2]<-quantile(s.hm$WTMP,0.75,type=1)
+q[8,2]<-quantile(s.sk$WTMP,0.75,type=1)
+
+#upper 90th
+q[1,3]<-quantile(s.gb$WTMP,0.9,type=1)
+q[2,3]<-quantile(s.wh$WTMP,0.9,type=1)
+q[3,3]<-quantile(s.oy$WTMP,0.9,type=1)
+q[4,3]<-quantile(s.bf$WTMP,0.9,type=1)
+q[5,3]<-quantile(s.fb$WTMP,0.9,type=1)
+q[6,3]<-quantile(s.wp$WTMP,0.9,type=1)
+q[7,3]<-quantile(s.hm$WTMP,0.9,type=1)
+q[8,3]<-quantile(s.sk$WTMP,0.9,type=1)
+
+#maximum temperature
+q[1,4]<-s.gb %>%  summarise(Value = max(WTMP))
+q[2,4]<-s.wh  %>% summarise(Value = max(WTMP))
+q[3,4]<-s.oy  %>% summarise(Value = max(WTMP))
+q[4,4]<-s.bf  %>% summarise(Value = max(WTMP))
+q[5,4]<-s.fb  %>% summarise(Value = max(WTMP))
+q[6,4]<-s.wp %>% summarise(Value = max(WTMP))
+q[7,4]<-s.hm  %>% summarise(Value = max(WTMP))
+q[8,4]<-s.sk  %>% summarise(Value = max(WTMP))
+
+#means
+q[1,5]<-mean(gb$WTMP)
+q[2,5]<-mean(wh$WTMP)
+q[3,5]<-mean(oy$WTMP)
+q[4,5]<-mean(bf$WTMP)
+q[5,5]<-mean(fb$WTMP)
+q[6,5]<-mean(wp$WTMP)
+q[7,5]<-mean(hm$WTMP)
+q[8,5]<-mean(sk$WTMP)
+
+#summer means
+#means
+q[1,6]<-mean(s.gb$WTMP)
+q[2,6]<-mean(s.wh$WTMP)
+q[3,6]<-mean(s.oy$WTMP)
+q[4,6]<-mean(s.bf$WTMP)
+q[5,6]<-mean(s.fb$WTMP)
+q[6,6]<-mean(s.wp$WTMP)
+q[7,6]<-mean(s.hm$WTMP)
+q[8,6]<-mean(s.sk$WTMP)
+
+#season length - problems here with hm and sk
+
+q[1,8]<-(gb%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>12.5)%>%tally)/4
+q[2,8]<-(wh%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>12.5)%>%tally)/4
+q[3,8]<-(oy%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>12.5)%>%tally)/4
+q[4,8]<-(bf%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>12.5)%>%tally)/4
+q[5,8]<-(fb%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>12.5)%>%tally)/4
+q[6,8]<-(wp%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>12.5)%>%tally)/4
+q[7,8]<-(hm%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>12.5)%>%tally)/4
+q[8,8]<-(sk%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>12.5)%>%tally)/4
+
+q[1,7]<-(gb%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>10)%>%tally)/4
+q[2,7]<-(wh%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>10)%>%tally)/4
+q[3,7]<-(oy%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>10)%>%tally)/4
+q[4,7]<-(bf%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>10)%>%tally)/4
+q[5,7]<-(fb%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>10)%>%tally)/4
+q[6,7]<-(wp%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>10)%>%tally)/4
+q[7,7]<-(hm%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>10)%>%tally)/4
+q[8,7]<-(sk%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>10)%>%tally)/4
+
+
+#egg lay dates
+#egg laying mean (spring)
+q[8,9]<-sk%>%filter(rdate>=as.Date(paste(year(rdate),03,01,sep="-")),rdate<=as.Date(paste(year(rdate),03,31,sep="-")))%>%summarize(Value=mean(WTMP)) 
+q[5,9]<-fb%>%filter(rdate>=as.Date(paste(year(rdate),03,15,sep="-")),rdate<=as.Date(paste(year(rdate),04,15,sep="-")))%>%summarize(Value=mean(WTMP)) 
+q[4,9]<-bf%>%filter(rdate>=as.Date(paste(year(rdate),03,31,sep="-")),rdate<=as.Date(paste(year(rdate),04,30,sep="-")))%>%summarize(Value=mean(WTMP)) 
+q[3,9]<-oy%>%filter(rdate>=as.Date(paste(year(rdate),05,01,sep="-")),rdate<=as.Date(paste(year(rdate),05,30,sep="-")))%>%summarize(Value=mean(WTMP)) 
+q[2,9]<-wh%>%filter(rdate>=as.Date(paste(year(rdate),05,20,sep="-")),rdate<=as.Date(paste(year(rdate),06,20,sep="-")))%>%summarize(Value=mean(WTMP)) 
+q[1,9]<-gb%>%filter(rdate>=as.Date(paste(year(rdate),06,01,sep="-")),rdate<=as.Date(paste(year(rdate),06,30,sep="-")))%>%summarize(Value=mean(WTMP)) 
+q[7,9]<-hm%>%filter(rdate>=as.Date(paste(year(rdate),05,01,sep="-")),rdate<=as.Date(paste(year(rdate),05,30,sep="-")))%>%summarize(Value=mean(WTMP)) #inat
+q[6,9]<-wp%>%filter(rdate>=as.Date(paste(year(rdate),05,01,sep="-")),rdate<=as.Date(paste(year(rdate),05,30,sep="-")))%>%summarize(Value=mean(WTMP))#ruesink
+#max (spring2)
+q[8,10]<-sk%>%filter(rdate>=as.Date(paste(year(rdate),03,01,sep="-")),rdate<=as.Date(paste(year(rdate),05,31,sep="-")))%>%summarize(Value=mean(WTMP)) 
+q[5,10]<-fb%>%filter(rdate>=as.Date(paste(year(rdate),03,01,sep="-")),rdate<=as.Date(paste(year(rdate),05,31,sep="-")))%>%summarize(Value=mean(WTMP))
+q[4,10]<-bf%>%filter(rdate>=as.Date(paste(year(rdate),03,31,sep="-")),rdate<=as.Date(paste(year(rdate),05,31,sep="-")))%>%summarize(Value=mean(WTMP)) 
+q[3,10]<-oy%>%filter(rdate>=as.Date(paste(year(rdate),05,20,sep="-")),rdate<=as.Date(paste(year(rdate),07,15,sep="-")))%>%summarize(Value=mean(WTMP)) 
+q[2,10]<-wh%>%filter(rdate>=as.Date(paste(year(rdate),07,01,sep="-")),rdate<=as.Date(paste(year(rdate),08,31,sep="-")))%>%summarize(Value=mean(WTMP)) 
+q[1,10]<-gb%>%filter(rdate>=as.Date(paste(year(rdate),07,01,sep="-")),rdate<=as.Date(paste(year(rdate),08,31,sep="-")))%>%summarize(Value=mean(WTMP)) 
+q[7,10]<-hm%>%filter(rdate>=as.Date(paste(year(rdate),06,01,sep="-")),rdate<=as.Date(paste(year(rdate),07,15,sep="-")))%>%summarize(Value=mean(WTMP))#inat
+q[6,10]<-wp%>%filter(rdate>=as.Date(paste(year(rdate),06,01,sep="-")),rdate<=as.Date(paste(year(rdate),07,15,sep="-")))%>%summarize(Value=mean(WTMP))#ruesink
+
+wp$site<-"wp"
+sk$site<-"sk"
+sk<-sk[,c(3:5)]
+wp<-wp[,c(2:4)]
+fb<-fb[,c(2:4)]
+bf<-bf[,c(2:4)]
+oy<-oy[,c(2:4)]
+pac2<-rbind(hm,wp)
+atll<-rbind(sk,fb,bf,oy,wh,gb)
+
+temp<-rbind(pac2,atll) #temperature data for all
+
+```
+
+We had to clean parts of the data to prepare it for analysis. The first issue we had to resolve was the extreme weight and caliper length outliers, which was clearly due to a misplaced decimal or missing 0 during data entry (these data points were off by a factor of 10 from "correct" data). In the silenced part of the markdown, this had to be corrected 5/432 times. 
+
+The second issue was that some snails ran out of food during the growth experiment, which could jeopardize our assumption of unlimited growth while in the common garden experiment. We checked snail consumption three times over the course of the experiment, both to ensure snails had food but also to record which ones ran out of food. The vast majority (391/432) of snails never ran out of food. 40/432 ran out of food once, while 1/432 ran out of food twice. The plot below shows this breakdown, with snails that never ran out food removed. For the purposes of this experiment, we decided to include snails that missed a single meal during the entirety of the experiment, but removed the single case in which a snail ran out of food twice. When we remove these snails that ran out of food once, we get the same results (in terms of models and significance). Further evidence it's ok to include these. 
+
+Further, the second plot below shows that most snails consumed all their food at timepoint 1, followed by timepoint 2 and finally timepoint 3 (seven snails ran out at t3)
+
+```{r,echo=F}
+
+ggplot(consfilter,aes(x=TPC.Label,y=n,group=TPC.Label))+geom_bar(stat="identity")+labs(x="Unique snail code",y="Number of times ran out of food")
+ggplot(conscase,aes(x=timepoint,y=n,group=timepoint))+geom_bar(stat="identity")
+
+
+```
+
+The third issue was that some snails died, or went missing, over the course of the experiment. 37 snails died, and 1 went missing. We removed these snails from consideration, as we could not get a final growth measurement. The two plots below show the distribution of dead snails across site and temperature. Intriguingly, snails tended to died at lower temperatures, especially at 16C. We will see later on this was the temperature of lowest growth as well. 
+
+```{r,echo=F}
+ggplot(dead,aes(x=temp,y=n))+geom_bar(stat="identity")+labs(x="Common Garden Temperature",y="Mortalities (n)")
+
+ggplot(deadpop,aes(x=pop,y=n))+geom_bar(stat="identity")+labs(x="Population",y="Mortalities (n)")
+
+```
+
+In, between removing snails that ran out of food twice (n=1), died (n=37), or went missing (n=1), there were 393 snails whose growth rates we kept. 
+
+So, there looks like there could be some significant patterns in survival between populations and common garden temperatures. Do we see that? Let's see at just a population and temperature level. 
+```{r,echo=F,warning=F}
+growth$dead<-ifelse(growth$alive=="y",0,ifelse(growth$alive=="n",1,NA))
+growth$aliven<-ifelse(growth$alive=="y",1,ifelse(growth$alive=="n",0,NA))
+alivepoptemp<-growth%>%group_by(temp,pop)%>%dplyr::summarise(alivesum=sum(aliven),.groups="drop")
+deadpoptemp<-growth%>%group_by(temp,pop)%>%dplyr::summarise(deadsum=sum(dead),.groups="drop")
+
+empty<-unique(growth[,c('temp','pop')])
+
+
+survival<-data.frame("site"=empty$pop,"temp"=empty$temp,"dead"=deadpoptemp$deadsum,"alive"=alivepoptemp$alivesum)
+y<-cbind(survival$alive,survival$dead)
+
+summary(aov(data=survival,y~site+temp))
+
+predictme<-(glm(y~temp,survival,family=binomial))
+predict(predictme,data.frame(temp=30),type="response")
+a<-(glm(y~site+temp,survival,family=binomial))
+summary(a)
+plot(predictme)
+
+
+#mean vs. season length.
+summary(lm(seasonlength10~mean,q,family='gaussian'))
+ggplot(q,aes(x=seasonlength10,y=mean))+geom_point()
+chart.Correlation(q[,c(2:8)],histogram=TRUE)
+
+```
+
+
+
+Temperature does have an effect, with increasing survivorship with increasing common garden temperature. As for sites, there may be some differences, but we can't tell this way. We will have to use environmental data as a proxy.
+
+```{r,include=FALSE,warning=F,echo=F}
+#lat
+survival$lat<-ifelse(survival$site=="Beaufort",34.819,
+              ifelse(survival$site=="Folly Beach",32.660525,
+              ifelse(survival$site=="Great Bay",43.089589,
+              ifelse(survival$site=="Humboldt",40.849448,
+              ifelse(survival$site=="Oyster", 37.288562,                                                                     ifelse(survival$site=="Woods Hole",41.57687,                                                                   ifelse(survival$site=="Willapa",46.5007,
+              ifelse(survival$site=="Skidaway",31.970,NA))))))))                                                                                                                                                                                                                                     
+
+#means
+survival$mean<-ifelse(survival$site=="Beaufort",q[4,5],
+              ifelse(survival$site=="Folly Beach",q[5,5],
+              ifelse(survival$site=="Great Bay",q[1,5],
+              ifelse(survival$site=="Humboldt",q[7,5],
+              ifelse(survival$site=="Oyster",q[3,5],                                                      
+              ifelse(survival$site=="Woods Hole",q[2,5],
+              ifelse(survival$site=="Willapa",q[6,5],
+              ifelse(survival$site=="Skidaway",q[8,5],NA))))))))
+
+
+#s.mean
+survival$s.mean<-ifelse(survival$site=="Beaufort",q[4,6],
+              ifelse(survival$site=="Folly Beach",q[5,6],
+              ifelse(survival$site=="Great Bay",q[1,6],
+              ifelse(survival$site=="Humboldt",q[7,6],
+              ifelse(survival$site=="Oyster",q[3,6],                                                      
+              ifelse(survival$site=="Woods Hole",q[2,6],
+              ifelse(survival$site=="Willapa",q[6,6],
+              ifelse(survival$site=="Skidaway",q[8,6],NA))))))))
+#q.mean
+survival$q.mean<-ifelse(survival$site=="Beaufort",q[4,2],
+              ifelse(survival$site=="Folly Beach",q[5,2],
+              ifelse(survival$site=="Great Bay",q[1,2],
+              ifelse(survival$site=="Humboldt",q[7,2],
+              ifelse(survival$site=="Oyster",q[3,2],                                                      
+              ifelse(survival$site=="Woods Hole",q[2,2],
+              ifelse(survival$site=="Willapa",q[6,2],
+              ifelse(survival$site=="Skidaway",q[8,2],NA))))))))
+#t.mean
+survival$t.mean<-ifelse(survival$site=="Beaufort",q[4,3],
+              ifelse(survival$site=="Folly Beach",q[5,3],
+              ifelse(survival$site=="Great Bay",q[1,3],
+              ifelse(survival$site=="Humboldt",q[7,3],
+              ifelse(survival$site=="Oyster",q[3,3],                                                      
+              ifelse(survival$site=="Woods Hole",q[2,3],
+              ifelse(survival$site=="Willapa",q[6,3],
+              ifelse(survival$site=="Skidaway",q[8,3],NA))))))))
+
+#max
+survival$max<-ifelse(survival$site=="Beaufort",q[4,4],
+              ifelse(survival$site=="Folly Beach",q[5,4],
+              ifelse(survival$site=="Great Bay",q[1,4],
+              ifelse(survival$site=="Humboldt",q[7,4],
+              ifelse(survival$site=="Oyster",q[3,4],                                                      
+              ifelse(survival$site=="Woods Hole",q[2,4],
+              ifelse(survival$site=="Willapa",q[6,4],
+              ifelse(survival$site=="Skidaway",q[8,4],NA))))))))
+
+#seasonlength10
+survival$seasonlength10<-ifelse(survival$site=="Beaufort",q[4,7],
+              ifelse(survival$site=="Folly Beach",q[5,7],
+              ifelse(survival$site=="Great Bay",q[1,7],
+              ifelse(survival$site=="Humboldt",q[7,7],
+              ifelse(survival$site=="Oyster",q[3,7],                                                      
+              ifelse(survival$site=="Woods Hole",q[2,7],
+              ifelse(survival$site=="Willapa",q[6,7],
+              ifelse(survival$site=="Skidaway",q[8,7],NA))))))))
+
+#seasonlength12
+survival$seasonlength12<-ifelse(survival$site=="Beaufort",q[4,8],
+              ifelse(survival$site=="Folly Beach",q[5,8],
+              ifelse(survival$site=="Great Bay",q[1,8],
+              ifelse(survival$site=="Humboldt",q[7,8],
+              ifelse(survival$site=="Oyster",q[3,8],                                                      
+              ifelse(survival$site=="Woods Hole",q[2,8],
+              ifelse(survival$site=="Willapa",q[6,8],
+              ifelse(survival$site=="Skidaway",q[8,8],NA))))))))
+```
+
+```{r,warning=F, echo=F}
+
+mods.surv<-list(
+  "null"=glmmTMB(y~1+ (1|site),survival,family=binomial),
+  "lat"=glmmTMB(y~lat+temp+ (1|site),survival,family=binomial),
+  "mean"=glmmTMB(y~mean+temp+ (1|site),survival,family=binomial),
+  "s.mean"=glmmTMB(y~s.mean+temp+ (1|site),survival,family=binomial),
+  "q.mean"=glmmTMB(y~q.mean+temp+ (1|site),survival,family=binomial),
+  "t.mean"=glmmTMB(y~t.mean+temp+ (1|site),survival,family=binomial),
+  "max"=glmmTMB(y~max+temp+ (1|site),survival,family=binomial),
+  "seasonlength12"=glmmTMB(y~seasonlength12+temp+ (1|site),survival,family=binomial),
+  "seasonlength10"=glmmTMB(y~seasonlength10+temp+ (1|site),survival,family=binomial),
+  "temp"=glmmTMB(y~temp+ (1|site),survival,family=binomial),
+  "temp.i"=glmmTMB(y~temp*site,survival,family=binomial))
+
+test<-list(
+  "a"=glmmTMB(y~temp*site,survival,family=binomial),
+  "b"=glmmTMB(y~temp+site,survival,family=binomial)
+)
+  
+car::Anova(glm(y~temp*site,survival,family=binomial))
+summary(glmmTMB(y~(temp*site),survival,family=binomial))
+
+aictab(mods.surv)
+
+summary(mods.surv$temp)
+
+c0<-(0.13375)
+c1<-(0.09588)
+tempt<-survival$temp
+p1=plogis(c0+c1*tempt)
+comb<-data.frame(tempt,p1)
+
+ggplot(growth,aes(x=temp,y=aliven))+geom_jitter(height=0.05,size=2)+geom_smooth(data=comb,aes(x=tempt,y=p1),method="glm",method.args=list(family="binomial"),formula=y~x,color="black")+theme_classic()+scale_x_continuous(name="Common Garden Temperature (°C)",breaks=c(16,20,24,26,28,30),labels=c(16,20,24,26,28,30))+scale_y_discrete(name="Survival",breaks=c(0,1),labels=c(0,1),limits=c(0,1))+theme(text=element_text(family="arial",size=22))
+
+```
+
+There is no difference when we look at survival across site, both purely as a comparison between sites as a factor and when we code sites by environmental data. However, survival of juveniles increases with common garden temperature. A cool result!
+
+## Environmental Data
+
+We extracted temperature data from each site. With this data, we calculated different environmental predictors that might explain patterns in growth. 
+
+* "Quantile" (°C)  
+  *The average SST of the upper 75th percentile of summer months (06/01 - 09/30)
+* "Decile" (°C)
+  *The average SST of the upper 90th percentile of summer months (06/01 - 09/30)
+* "max" 
+  *The maximum SST value recorded during summer months (06/01 - 09/30)
+* "mean"  (°C)
+  *The mean SST of the site, calculated across the entire year
+* "summer mean" (°C)
+  *The mean SST of the site, calculated during the summer months (06/01 - 09/30)
+* "seasonlength10/16" (days)
+  *The number of days where the average daily temperature exceeded a threshold. Here, we use 16C, since this was our lowest temperature in experimentation and resulted in very slow growth (accelerates at 20C) - from Cheng et al. 2017. However, things become signicant when performed at 10C. We can also use 12.5C and get somewhat significant results, after the breakpoint for Oxygen consumption found in Schick's dissertation (Schick 1971) 
+
+We also used latitude as a predictor (not shown in table below)
+```{r,include=T,echo=F,warning=F}
+#plot of site temperatures
+#highlight regions of development
+dev_dates<-read.csv(here::here('data/dev_dates.csv'))
+
+dev_dates$xmin<-as.Date(dev_dates$xmin,format="%Y-%m-%d")
+dev_dates$xmax<-as.Date(dev_dates$xmax,format="%Y-%m-%d")
+dev_dates$ymin<--Inf
+dev_dates$ymax<-Inf
+
+dev_dates<-filter(dev_dates,site==c("Great Bay, NH","Skidaway, GA"))
+
+#data_s<-data.frame(xmin=as.Date("2018-01-01",format="%Y-%m-%d"),xmax=as.Date("2018-12-31",format="%Y-%m-#%d"),ymin=-Inf,ymax=10)
+#ggplot(data=temp,aes(x=rdate,y=WTMP,color=site))+ggplot2::scale_fill_viridis_d(name="site",labels=c("gre#at bay, NH","woods hole, MA","oyster, VA","beaufort, NC","folly beach, SC","skidaway, GA","willapa, #WA","humboldt, CA"),option="D")+scale_color_viridis_d(name="site",labels=c("great bay, NH","woods hole, #MA","oyster, VA","beaufort, NC","folly beach, SC","skidaway, GA","willapa, WA","humboldt, #CA"),option="D")+theme_classic()+geom_vline(xintercept = 152)+geom_vline(xintercept = 273)+ylab("SST #(°C)")+xlab("")+scale_x_date(date_labels = #"%b")+theme(text=element_text(family="sanserif",size=14))+stat_summary(geom="line",fun.y=base::mean,size#=2)+guides(color=guide_legend(override.aes=list(fill=NA)))+geom_rect(data=data_s,aes(xmin=xmin,xmax=xmax#,ymin=ymin,ymax=ymax),fill=("grey"),alpha=0.85,inherit.aes=F)
+#
+#ggplot(data=temp,aes(x=date,y=WTMP,color=site))+ggplot2::scale_fill_viridis_d(name="Site",labels=c("Grea#t Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, #WA","Humboldt, CA"),option="D")+scale_color_viridis_d(name="Site",labels=c("Great Bay, NH","Woods Hole, #MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, #CA"),option="D")+theme_classic()+geom_vline(xintercept = 152)+geom_vline(xintercept = 273)+ylab("SST #(°C)")+xlab("")+scale_x_date(date_labels = #"%b")+theme(text=element_text(family="sanserif",size=14))+stat_summary(geom="line",fun.y=base::mean,size#=2)+guides(color=guide_legend(override.aes=list(fill=NA)))
+#
+##north-south  development mean and season length above 10
+#ggplot(data=temp,aes(x=date,y=WTMP,color=site))+geom_rect(data=data_s,aes(xmin=xmin,xmax=xmax,ymin=ymin,#ymax=ymax),fill=("grey"),inherit.aes=F)+geom_rect(data=dev_dates,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=#ymax,fill=site),alpha=0.2,inherit.aes=F)+scale_fill_manual(name="Site",labels=c("Great Bay, #NH","Skidaway, GA"),values=c("yellow","blue"))+ggplot2::scale_color_viridis_d(name="Site",labels=c("Grea#t Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, #WA","Humboldt, CA"),option="D")+theme_classic()+geom_vline(xintercept = 152)+geom_vline(xintercept = #273)+ylab("SST (°C)")+xlab("")+scale_x_date(date_labels = #"%b")+theme(text=element_text(family="sanserif",size=14))+stat_summary(geom="line",fun.y=base::mean,size#=2)+guides(color=guide_legend(override.aes=list(fill=NA)))+
+#  geom_segment(aes(y=20,yend=20,x=as.Date("2018-03-01",format="%Y-%m-%d")),xend=as.Date("2018-05-30",for#mat="%Y-%m-%d"),size=2,color="black")+geom_segment(aes(y=22.7,yend=22.7,x=as.Date("2018-07-01",format="%#Y-%m-%d")),xend=as.Date("2018-08-31",format="%Y-%m-%d"),size=2,color="black")
+#
+##note: the geom_seg argument makes this file size HUGE for some reason. 
+#
+##temp$site<-factor(temp$site,levels=c("gb","wh","nah15","hmi2","oy","fb","GCSK"))
+##spring_env_plot<-ggplot(data=temp,aes(x=date,y=WTMP,color=site))+geom_rect(data=dev_dates,aes(xmin=xmin#,xmax=xmax,ymin=ymin,ymax=ymax,fill=site),alpha=0.2,inherit.aes=F,color=c("red","blue"),fill=c("red","bl#ue"))+scale_fill_manual(name="Site",labels=c("Great Bay, NH","Skidaway, #GA"),values=c("yellow","blue"))+ggplot2::scale_color_viridis_d(name="Site",labels=c("Great Bay, #NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, #WA","Humboldt, CA"),option="D")+theme_classic()+geom_vline(xintercept = 152)+geom_vline(xintercept = #273)+ylab("SST (°C)")+xlab("")+scale_x_date(date_labels = #"%b")+theme(text=element_text(family="Times",size=22))+stat_summary(geom="line",fun.y=base::mean,size=2)#+guides(color=guide_legend(override.aes=list(fill=NA)))+geom_segment(aes(y=20,yend=20,x=as.Date("2018-03#-01",format="%Y-%m-%d")),xend=as.Date("2018-05-30",format="%Y-%m-%d"),size=2,color="black")+geom_segment#(aes(y=22.7,yend=22.7,x=as.Date("2018-07-01",format="%Y-%m-%d")),xend=as.Date("2018-08-31",format="%Y-%m#-%d"),size=2,color="black")
+#
+#for figure
+#ggplot(data=temp,aes(x=date,y=WTMP,color=site))+geom_rect(data=dev_dates,aes(xmin=xmin,xmax=xmax,ymin=ym#in,ymax=ymax,fill=site),alpha=0.2,inherit.aes=F,color=c("red","blue"),fill=c("red","blue"))+scale_fill_m#anual(labels=c("Great Bay, NH","Skidaway, #GA"),values=c("yellow","blue"))+ggplot2::scale_color_viridis_d(labels=c("Great Bay, NH","Woods Hole, #MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, #CA"),option="D")+theme_classic()+geom_vline(xintercept = 152)+geom_vline(xintercept = 273)+ylab("SST #(°C)")+xlab("")+scale_x_date(date_labels = #"%b")+theme(text=element_text(family="Times",size=22),axis.text=element_text(color="black",size=22),lege#nd.title = element_blank())+stat_summary(geom="line",fun.y=base::mean,size=2)+guides(color=guide_legend(#override.aes=list(fill=NA)))
+
+
+#season length
+gb_length<-gb%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>10)
+sk_length<-sk%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(WTMP))%>%na.omit()%>%filter(daily_wtmp>10)
+
+
+  
+
+
+q
+
+
+```
+
+# Data exploration
+
+This data exploration is for linear models only, describing putative TPCs. Therefore, the section below is just for information purposes and is shown collapsed or is silenced- see R code for details. 
+
+
+## Do sites differ? 
+
+Do populations differ in their growth rate across the common garden experiemnt? Here, ANOVA tells us that growth between sites are significantly different. We are justified in pursuing population and temperature level differences. 
+```{r,include=T,warning=F}
+
+anovasites<-(aov(cal.length~pop*temp,data=growth.alive))
+summary(anovasites)
+growth.alive$pop<-as.factor(growth.alive$pop)
+
+
+```
+
+## Shell size by population
+
+Should we use end caliper lengths, or do we need to subtract initial caliper length from end caliper length? In other words, do initial caliper lengths differ, requiring us to standardize our growth rate? Here, we find that populations do differ in initial growth. Tukey post-hoc comparisons (silenced, in code) further support this. Thus, we must standardize growth by creating a growth rate of Final size - initial size. The univariate boxplots below also show that while outliers do appear to be present, they can be attributed to population or temperature level differences. 
+```{r,echo=F,warning=F}
+summary(aov(cal.length.start~pop,data=growth.alive))
+
+ggplot(growth.alive,aes(x=pop,y=cal.length.start))+geom_boxplot()
+```
+```{r,include=F,echo=F,warning=F}
+summary(anovasites)
+#post-hoc test
+TukeyHSD(anovasites,"pop")
+
+ggplot(growth.alive,aes(x=temp,y=cal.length,color=pop))+geom_point()+geom_smooth()+facet_wrap(pop~.)
+
+
+
+ggplot(growth.alive,aes(x=pop,y=cal.length))+geom_boxplot()
+
+ggplot(growth.alive,aes(x=temp,y=cal.length,group=temp))+geom_boxplot()
+```
+
+
+## Correlations
+```{r,include=T,echo=F,warning=F}
+
+
+M <- (growth.alive[,9:12])
+chart.Correlation(M,histogram=TRUE)
+
+```
+
+Here, we see that cal length and weight are both highly correlated. Thus, we will not include weight in any of our models. 
+
+
+## Residuals of full model 
+Here, we investigate the residuals of the full model (lm(cal.length~pop*temp*oce*bin,growth.alive)). This is to check if we need to transform our data, and if our assumptions of normality are warranted.  
+
+```{r,echo=T,warning=F}
+growth.alive<-na.omit(growth.alive)
+growth.alive.sqrt<-growth.alive
+growth.alive.sqrt$cal.length<-(growth.alive$cal.length)^2
+fulli<-(lm(cal.length~pop*temp*oce*bin,growth.alive.sqrt))
+
+plot(resid(fulli))
+hist(resid(fulli))
+skewness(growth.alive.sqrt$cal.length)
+#negative skew
+growth.alive.sqrt<-tidyr::drop_na(growth.alive.sqrt)
+growth.alive.sqrt<-na.omit(growth.alive.sqrt)
+```
+Things look ok, but maybe log-transforming growth will improve our skew and residual plots.
+
+```{r,echo=T,warning=F}
+growth.alive$log_growth<-log(max(growth.alive$cal.length+1)-growth.alive$cal.length)
+fulli2<-(lm(log_growth~pop*temp*oce*bin,growth.alive))
+
+plot(fulli2)
+plot(resid(fulli2))
+hist(resid(fulli2))
+
+skewness(growth.alive$log_growth)
+```
+While the log transformation improves the skewness slightly, we will assume the distribution of residuals are normal and proceed with untransformed growth rate. 
+
+## Coplots
+
+Other than temperature and population, which we control for, do we see different reactions depending on tupperware bin (our subreplication)? Here, reactions appaer to be the same no matter what bin we used. We do not need to include bin in our models (further supported by AIC below in data analysis). Note: Margins were too big on this figure to include in the markdown - viewable in R console. 
+```{r,echo=F}
+#dev.off()
+#coplot(cal.length~temp |pop*bin,data=growth.alive)
+
+```
+
+# Data Analysis
+## Model predictors
+
+We are going to create TPCs for each population by temperature, using both piecewise (segmented) regression and quadratic regression. What predictors should be used in these models?
+```{r,echo=F, warning=F}
+
+models<-list(
+  "null" = lm(cal.length~1,growth.alive),
+  "pop" = lm(cal.length~pop,growth.alive),
+  "temp" = lm(cal.length~temp,growth.alive),
+  "oce" = lm(cal.length~temp,growth.alive),
+  "bin" = lm(cal.length~bin,growth.alive),
+  "out" = lm(cal.length~ran.out,growth.alive),
+  
+  "pop.temp" = lm(cal.length~pop+temp,growth.alive),
+  "pop.oce" = lm(cal.length~pop+oce,growth.alive),
+  "pop.bin" = lm(cal.length~pop+bin,growth.alive),
+  "pop.out" = lm(cal.length~pop+ran.out,growth.alive),
+  "temp.oce" = lm(cal.length~oce+temp,growth.alive),
+  "temp.bin" = lm(cal.length~bin+temp,growth.alive),
+  "oce.bin" = lm(cal.length~bin+oce,growth.alive),
+  "temp.out" = lm(cal.length~temp+ran.out,growth.alive),
+  "oce.out" = lm(cal.length~oce+ran.out,growth.alive),
+  "bin.out" = lm(cal.length~bin+ran.out,growth.alive),
+  
+  "pop.temp.oce" = lm(cal.length~pop+temp+oce,growth.alive),
+  "pop.temp.bin" = lm(cal.length~pop+temp+bin,growth.alive),
+  "pop.temp.out" = lm(cal.length~pop+temp+ran.out,growth.alive),
+  "oce.temp.bin" = lm(cal.length~oce+temp+bin,growth.alive),
+  "oce.temp.out"= lm(cal.length~oce+temp+ran.out,growth.alive),
+  "oce.bin.out"=lm(cal.length~oce+bin+ran.out,growth.alive),
+  "bin.out.temp" = lm(cal.length~bin+ran.out+temp,growth.alive),
+  
+  "pop.temp.oce.bin"= lm(cal.length~pop+oce+temp+bin,growth.alive),
+  "pop.temp.oce.out" = lm(cal.length~pop+oce+temp+ran.out,growth.alive),
+  "temp.oce.bin.out"= lm(cal.length~bin+oce+temp+ran.out,growth.alive),
+  
+  "fulla" = lm(cal.length~pop+temp+oce+bin+ran.out,growth.alive),
+  
+  
+  "pop*temp" = lm(cal.length~pop*temp,growth.alive),
+  "pop*oce" = lm(cal.length~pop*oce,growth.alive),
+  "pop*bin" = lm(cal.length~pop*bin,growth.alive),
+  "temp*oce" = lm(cal.length~oce*temp,growth.alive),
+  "temp*bin" = lm(cal.length~bin*temp,growth.alive),
+  "oce*bin" = lm(cal.length~bin*oce,growth.alive),
+  "pop*out" = lm(cal.length~pop*ran.out,growth.alive),
+  "temp*out" = lm(cal.length~temp*ran.out,growth.alive),
+  "oce*out" = lm(cal.length~oce*ran.out,growth.alive),
+  "bin*out" = lm(cal.length~bin*ran.out,growth.alive),
+  
+  "pop*temp*oce" = lm(cal.length~pop*temp*oce,growth.alive),
+  "pop*temp*bin" = lm(cal.length~pop*temp*bin,growth.alive),
+  "pop*temp*out" = lm(cal.length~pop*temp*ran.out,growth.alive),
+  "oce*temp*bin" = lm(cal.length~oce*temp*bin,growth.alive),
+  "oce*temp*out"= lm(cal.length~oce*temp*ran.out,growth.alive),
+  "oce*bin*out"=lm(cal.length~oce*bin*ran.out,growth.alive),
+  "bin*out*temp" = lm(cal.length~bin*ran.out*temp,growth.alive),
+  
+  "pop*temp*oce*bin"= lm(cal.length~pop*oce*temp*bin,growth.alive),
+  "pop*temp*oce*out" = lm(cal.length~pop*oce*temp*ran.out,growth.alive),
+  "temp*oce*bin*out"= lm(cal.length~bin*oce*temp*ran.out,growth.alive),
+  
+  "fulli" = lm(cal.length~pop*temp*oce*bin*ran.out,growth.alive))
+
+aictab(models)
+
+```
+Here, we see that a few models are well supported. We choose the interactive pop*temp model only because 1) the additive model only tells us if populations are different at each temperature, while the interactive model also tells us the populations slopes with temperature and gives us a TPC 2) oce adds nothing to the models, so is removed. 3) Looking at our coplots of bin, bin had no effect on growth. 
+
+```{r,echo=F}
+summary(models$"pop*temp")
+
+```
+
+Based on this supported model structure, we will construct segmented and quadratic models that follow this formulation: growth~pop*temp. 
+
+## Broken Stick regression
+
+It's hard to compare TPC against one another. One method we've settled on is the use of broken stick regression to allow us to quantify the shape of the reaction as well as the thermal optima (x) and the maximal trait performance (y). Here, we used the segmented package to create single-optima broken stick regressions that also allow us to extract optimas.
+
+We used a separate model for each population, as segmented does not allow for grouping. We used the following formulation: glm(shell length ~ temperature, population,family=gaussian), such that we modeled the response of shell lengths from a single population to temperature. 
+
+```{r,include=T,echo=F,warning=F}
+windowsFonts(Times=windowsFont("Times New Roman"))
+#create dataframes by population so 
+three<-unique(c(1,2,3))
+
+#bf random bins
+bf<-filter(growth.alive,pop=="Beaufort")
+bf_1<-(sample(three,1,replace=F))
+three2<-(three[!(three %in% bf_1)])
+bf_2<-(sample(three2,1,replace=F))
+three3<-(three2[!(three2 %in% bf_2)])
+bf_3<-three3
+bf_1
+bf_2
+bf_3
+
+bf1<-filter(bf,bin==bf_1)
+bf2<-filter(bf,bin==bf_2)
+bf3<-filter(bf,bin==bf_3)
+
+#fb random bins
+fb<-filter(growth.alive,pop=="Folly Beach")
+fb_1<-(sample(three,1,replace=F))
+three2<-(three[!(three %in% fb_1)])
+fb_2<-(sample(three2,1,replace=F))
+three3<-(three2[!(three2 %in% fb_2)])
+fb_3<-three3
+fb_1
+fb_2
+fb_3
+
+fb1<-filter(fb,bin==fb_1)
+fb2<-filter(fb,bin==fb_2)
+fb3<-filter(fb,bin==fb_3)
+
+#gb random bins
+gb<-filter(growth.alive,pop=="Great Bay")
+gb_1<-(sample(three,1,replace=F))
+three2<-(three[!(three %in% gb_1)])
+gb_2<-(sample(three2,1,replace=F))
+three3<-(three2[!(three2 %in% gb_2)])
+gb_3<-three3
+gb_1
+gb_2
+gb_3
+
+gb1<-filter(gb,bin==gb_1)
+gb2<-filter(gb,bin==gb_2)
+gb3<-filter(gb,bin==gb_3)
+
+#hm random bins
+hm<-filter(growth.alive,pop=="Humboldt")
+hm_1<-(sample(three,1,replace=F))
+three2<-(three[!(three %in% hm_1)])
+hm_2<-(sample(three2,1,replace=F))
+three3<-(three2[!(three2 %in% hm_2)])
+hm_3<-three3
+hm_1
+hm_2
+hm_3
+
+hm1<-filter(hm,bin==hm_1)
+hm2<-filter(hm,bin==hm_2)
+hm3<-filter(hm,bin==hm_3)
+
+#oy random bins
+oy<-filter(growth.alive,pop=="Oyster")
+oy_1<-(sample(three,1,replace=F))
+three2<-(three[!(three %in% oy_1)])
+oy_2<-(sample(three2,1,replace=F))
+three3<-(three2[!(three2 %in% oy_2)])
+oy_3<-three3
+oy_1
+oy_2
+oy_3
+
+oy1<-filter(oy,bin==oy_1)
+oy2<-filter(oy,bin==oy_2)
+oy3<-filter(oy,bin==oy_3)
+
+#sk random bins
+sk<-filter(growth.alive,pop=="Skidaway")
+sk_1<-(sample(three,1,replace=F))
+three2<-(three[!(three %in% sk_1)])
+sk_2<-(sample(three2,1,replace=F))
+three3<-(three2[!(three2 %in% sk_2)])
+sk_3<-three3
+sk_1
+sk_2
+sk_3
+
+sk1<-filter(sk,bin==sk_1)
+sk2<-filter(sk,bin==sk_2)
+sk3<-filter(sk,bin==sk_3)
+
+#wp random bins
+wp<-filter(growth.alive,pop=="Willapa")
+wp_1<-(sample(three,1,replace=F))
+three2<-(three[!(three %in% wp_1)])
+wp_2<-(sample(three2,1,replace=F))
+three3<-(three2[!(three2 %in% wp_2)])
+wp_3<-three3
+wp_1
+wp_2
+wp_3
+
+wp1<-filter(wp,bin==wp_1)
+wp2<-filter(wp,bin==wp_2)
+wp3<-filter(wp,bin==wp_3)
+
+#wh random bins
+wh<-filter(growth.alive,pop=="Woods Hole")
+wh_1<-(sample(three,1,replace=F))
+three2<-(three[!(three %in% wh_1)])
+wh_2<-(sample(three2,1,replace=F))
+three3<-(three2[!(three2 %in% wh_2)])
+wh_3<-three3
+wh_1
+wh_2
+wh_3
+
+wh1<-filter(wh,bin==wh_1)
+wh2<-filter(wh,bin==wh_2)
+wh3<-filter(wh,bin==wh_3)
+```
+
+## rTPC model and predictions on binned data
+```{r,include=F}
+#creates rTPC  models for each population over the common garden temperatures
+#wh
+  #wh1
+mod_wh1<-nls_multstart(cal.length~boatman_2017(temp=temp,max, tmin, tmax, a, b),data=wh1,iter=c(3,3,3,3,3),
+                   start_lower = get_start_vals(wh1$temp, wh1$cal.length, model_name = 'boatman_2017')-1,
+                  start_upper = get_start_vals(wh1$temp, wh1$cal.length, model_name = 'boatman_2017')+1,
+                   lower = get_lower_lims(wh1$temp, wh1$cal.length, model_name = 'boatman_2017'),
+                   upper = get_upper_lims(wh1$temp, wh1$cal.length, model_name = 'boatman_2017'),
+                   supp_errors = 'Y',
+                   convergence_count = FALSE)
+
+# get predictions
+preds_wh1 <- data.frame(temp = seq(min(wh1$temp), max(wh1$temp), length.out = 100))
+preds_wh1 <- broom::augment(mod_wh1, newdata = preds_wh1)
+
+
+#wh2
+mod_wh2<-nls_multstart(cal.length~boatman_2017(temp=temp,max, tmin, tmax, a, b),data=wh2,iter=c(3,3,3,3,3),
+                   start_lower = get_start_vals(wh2$temp, wh2$cal.length, model_name = 'boatman_2017')-1,
+                  start_upper = get_start_vals(wh2$temp, wh2$cal.length, model_name = 'boatman_2017')+1,
+                   lower = get_lower_lims(wh2$temp, wh2$cal.length, model_name = 'boatman_2017'),
+                   upper = get_upper_lims(wh2$temp, wh2$cal.length, model_name = 'boatman_2017'),
+                   supp_errors = 'Y',
+                   convergence_count = FALSE)
+
+# get predictions
+preds_wh2 <- data.frame(temp = seq(min(wh2$temp), max(wh2$temp), length.out = 100))
+preds_wh2 <- broom::augment(mod_wh2, newdata = preds_wh2)
+
+#wh3
+mod_wh3<-nls_multstart(cal.length~boatman_2017(temp=temp,max, tmin, tmax, a, b),data=wh3,iter=c(3,3,3,3,3),
+                   start_lower = get_start_vals(wh3$temp, wh3$cal.length, model_name = 'boatman_2017')-1,
+                  start_upper = get_start_vals(wh3$temp, wh3$cal.length, model_name = 'boatman_2017')+1,
+                   lower = get_lower_lims(wh3$temp, wh3$cal.length, model_name = 'boatman_2017'),
+                   upper = get_upper_lims(wh3$temp, wh3$cal.length, model_name = 'boatman_2017'),
+                   supp_errors = 'Y',
+                   convergence_count = FALSE)
+
+# get predictions
+preds_wh3 <- data.frame(temp = seq(min(wh3$temp), max(wh3$temp), length.out = 100))
+preds_wh3 <- broom::augment(mod_wh3, newdata = preds_wh3)
+
+#gb
+  #gb1
+mod_gb1<-nls_multstart(cal.length~boatman_2017(temp=temp,max, tmin, tmax, a, b),data=gb1,iter=c(3,3,3,3,3),
+                   start_lower = get_start_vals(gb1$temp, gb1$cal.length, model_name = 'boatman_2017')-1,
+                  start_upper = get_start_vals(gb1$temp, gb1$cal.length, model_name = 'boatman_2017')+1,
+                   lower = get_lower_lims(gb1$temp, gb1$cal.length, model_name = 'boatman_2017'),
+                   upper = get_upper_lims(gb1$temp, gb1$cal.length, model_name = 'boatman_2017'),
+                   supp_errors = 'Y',
+                   convergence_count = FALSE)
+
+# get predictions
+preds_gb1 <- data.frame(temp = seq(min(gb1$temp), max(gb1$temp), length.out = 100))
+preds_gb1 <- broom::augment(mod_gb1, newdata = preds_gb1)
+
+#gb2
+mod_gb2<-nls_multstart(cal.length~boatman_2017(temp=temp,max, tmin, tmax, a, b),data=gb2,iter=c(3,3,3,3,3),
+                   start_lower = get_start_vals(gb2$temp, gb2$cal.length, model_name = 'boatman_2017')-1,
+                  start_upper = get_start_vals(gb2$temp, gb2$cal.length, model_name = 'boatman_2017')+1,
+                   lower = get_lower_lims(gb2$temp, gb2$cal.length, model_name = 'boatman_2017'),
+                   upper = get_upper_lims(gb2$temp, gb2$cal.length, model_name = 'boatman_2017'),
+                   supp_errors = 'Y',
+                   convergence_count = FALSE)
+
+# get predictions
+preds_gb2 <- data.frame(temp = seq(min(gb2$temp), max(gb2$temp), length.out = 100))
+preds_gb2 <- broom::augment(mod_gb2, newdata = preds_gb2)
+
+#gb3
+mod_gb3<-nls_multstart(cal.length~boatman_2017(temp=temp,max, tmin, tmax, a, b),data=gb3,iter=c(3,3,3,3,3),
+                   start_lower = get_start_vals(gb3$temp, gb3$cal.length, model_name = 'boatman_2017')-1,
+                  start_upper = get_start_vals(gb3$temp, gb3$cal.length, model_name = 'boatman_2017')+1,
+                   lower = get_lower_lims(gb3$temp, gb3$cal.length, model_name = 'boatman_2017'),
+                   upper = get_upper_lims(gb3$temp, gb3$cal.length, model_name = 'boatman_2017'),
+                   supp_errors = 'Y',
+                   convergence_count = FALSE)
+
+# get predictions
+preds_gb3 <- data.frame(temp = seq(min(gb3$temp), max(gb3$temp), length.out = 100))
+preds_gb3 <- broom::augment(mod_gb3, newdata = preds_gb3)
+
+#oy
+# oy
+#oy1
+mod_oy1<-nls_multstart(cal.length~boatman_2017(temp=temp,max, tmin, tmax, a, b),data=oy1,iter=c(3,3,3,3,3),
+                   start_lower = get_start_vals(oy1$temp, oy1$cal.length, model_name = 'boatman_2017')-1,
+                  start_upper = get_start_vals(oy1$temp, oy1$cal.length, model_name = 'boatman_2017')+1,
+                   lower = get_lower_lims(oy1$temp, oy1$cal.length, model_name = 'boatman_2017'),
+                   upper = get_upper_lims(oy1$temp, oy1$cal.length, model_name = 'boatman_2017'),
+                   supp_errors = 'Y',
+                   convergence_count = FALSE)
+
+# get predictions
+preds_oy1 <- data.frame(temp = seq(min(oy1$temp), max(oy1$temp), length.out = 100))
+preds_oy1 <- broom::augment(mod_oy1, newdata = preds_oy1)
+
+#oy2
+mod_oy2<-nls_multstart(cal.length~boatman_2017(temp=temp,max, tmin, tmax, a, b),data=oy2,iter=c(3,3,3,3,3),
+                   start_lower = get_start_vals(oy2$temp, oy2$cal.length, model_name = 'boatman_2017')-1,
+                  start_upper = get_start_vals(oy2$temp, oy2$cal.length, model_name = 'boatman_2017')+1,
+                   lower = get_lower_lims(oy2$temp, oy2$cal.length, model_name = 'boatman_2017'),
+                   upper = get_upper_lims(oy2$temp, oy2$cal.length, model_name = 'boatman_2017'),
+                   supp_errors = 'Y',
+                   convergence_count = FALSE)
+
+# get predictions
+preds_oy2 <- data.frame(temp = seq(min(oy2$temp), max(oy2$temp), length.out = 100))
+preds_oy2 <- broom::augment(mod_oy2, newdata = preds_oy2)
+
+#oy3
+mod_oy3<-nls_multstart(cal.length~boatman_2017(temp=temp,max, tmin, tmax, a, b),data=oy3,iter=c(3,3,3,3,3),
+                   start_lower = get_start_vals(oy3$temp, oy3$cal.length, model_name = 'boatman_2017')-1,
+                  start_upper = get_start_vals(oy3$temp, oy3$cal.length, model_name = 'boatman_2017')+1,
+                   lower = get_lower_lims(oy3$temp, oy3$cal.length, model_name = 'boatman_2017'),
+                   upper = get_upper_lims(oy3$temp, oy3$cal.length, model_name = 'boatman_2017'),
+                   supp_errors = 'Y',
+                   convergence_count = FALSE)
+
+# get predictions
+preds_oy3 <- data.frame(temp = seq(min(oy3$temp), max(oy3$temp), length.out = 100))
+preds_oy3 <- broom::augment(mod_oy3, newdata = preds_oy3)
+
+# bf
+#bf1
+mod_bf1<-nls_multstart(cal.length~boatman_2017(temp=temp,max, tmin, tmax, a, b),data=bf1,iter=c(3,3,3,3,3),
+                   start_lower = get_start_vals(bf1$temp, bf1$cal.length, model_name = 'boatman_2017')-1,
+                  start_upper = get_start_vals(bf1$temp, bf1$cal.length, model_name = 'boatman_2017')+1,
+                   lower = get_lower_lims(bf1$temp, bf1$cal.length, model_name = 'boatman_2017'),
+                   upper = get_upper_lims(bf1$temp, bf1$cal.length, model_name = 'boatman_2017'),
+                   supp_errors = 'Y',
+                   convergence_count = FALSE)
+
+# get predictions
+preds_bf1 <- data.frame(temp = seq(min(bf1$temp), max(bf1$temp), length.out = 100))
+preds_bf1 <- broom::augment(mod_bf1, newdata = preds_bf1)
+
+#bf2
+mod_bf2<-nls_multstart(cal.length~boatman_2017(temp=temp,max, tmin, tmax, a, b),data=bf2,iter=c(3,3,3,3,3),
+                   start_lower = get_start_vals(bf2$temp, bf2$cal.length, model_name = 'boatman_2017')-1,
+                  start_upper = get_start_vals(bf2$temp, bf2$cal.length, model_name = 'boatman_2017')+1,
+                   lower = get_lower_lims(bf2$temp, bf2$cal.length, model_name = 'boatman_2017'),
+                   upper = get_upper_lims(bf2$temp, bf2$cal.length, model_name = 'boatman_2017'),
+                   supp_errors = 'Y',
+                   convergence_count = FALSE)
+
+# get predictions
+preds_bf2 <- data.frame(temp = seq(min(bf2$temp), max(bf2$temp), length.out = 100))
+preds_bf2 <- broom::augment(mod_bf2, newdata = preds_bf2)
+
+#bf3
+mod_bf3<-nls_multstart(cal.length~boatman_2017(temp=temp,max, tmin, tmax, a, b),data=bf3,iter=c(3,3,3,3,3),
+                   start_lower = get_start_vals(bf3$temp, bf3$cal.length, model_name = 'boatman_2017')-1,
+                  start_upper = get_start_vals(bf3$temp, bf3$cal.length, model_name = 'boatman_2017')+1,
+                   lower = get_lower_lims(bf3$temp, bf3$cal.length, model_name = 'boatman_2017'),
+                   upper = get_upper_lims(bf3$temp, bf3$cal.length, model_name = 'boatman_2017'),
+                   supp_errors = 'Y',
+                   convergence_count = FALSE)
+
+# get predictions
+preds_bf3 <- data.frame(temp = seq(min(bf3$temp), max(bf3$temp), length.out = 100))
+preds_bf3 <- broom::augment(mod_bf3, newdata = preds_bf3)
+
+#fb
+#fb1
+mod_fb1<-nls_multstart(cal.length~boatman_2017(temp=temp,max, tmin, tmax, a, b),data=fb1,iter=c(3,3,3,3,3),
+                   start_lower = get_start_vals(fb1$temp, fb1$cal.length, model_name = 'boatman_2017')-1,
+                  start_upper = get_start_vals(fb1$temp, fb1$cal.length, model_name = 'boatman_2017')+1,
+                   lower = get_lower_lims(fb1$temp, fb1$cal.length, model_name = 'boatman_2017'),
+                   upper = get_upper_lims(fb1$temp, fb1$cal.length, model_name = 'boatman_2017'),
+                   supp_errors = 'Y',
+                   convergence_count = FALSE)
+
+# get predictions
+preds_fb1 <- data.frame(temp = seq(min(fb1$temp), max(fb1$temp), length.out = 100))
+preds_fb1 <- broom::augment(mod_fb1, newdata = preds_fb1)
+
+#fb2
+mod_fb2<-nls_multstart(cal.length~boatman_2017(temp=temp,max, tmin, tmax, a, b),data=fb2,iter=c(3,3,3,3,3),
+                   start_lower = get_start_vals(fb2$temp, fb2$cal.length, model_name = 'boatman_2017')-1,
+                  start_upper = get_start_vals(fb2$temp, fb2$cal.length, model_name = 'boatman_2017')+1,
+                   lower = get_lower_lims(fb2$temp, fb2$cal.length, model_name = 'boatman_2017'),
+                   upper = get_upper_lims(fb2$temp, fb2$cal.length, model_name = 'boatman_2017'),
+                   supp_errors = 'Y',
+                   convergence_count = FALSE)
+
+# get predictions
+preds_fb2 <- data.frame(temp = seq(min(fb2$temp), max(fb2$temp), length.out = 100))
+preds_fb2 <- broom::augment(mod_fb2, newdata = preds_fb2)
+
+#fb3
+mod_fb3<-nls_multstart(cal.length~boatman_2017(temp=temp,max, tmin, tmax, a, b),data=fb3,iter=c(3,3,3,3,3),
+                   start_lower = get_start_vals(fb3$temp, fb3$cal.length, model_name = 'boatman_2017')-1,
+                  start_upper = get_start_vals(fb3$temp, fb3$cal.length, model_name = 'boatman_2017')+1,
+                   lower = get_lower_lims(fb3$temp, fb3$cal.length, model_name = 'boatman_2017'),
+                   upper = get_upper_lims(fb3$temp, fb3$cal.length, model_name = 'boatman_2017'),
+                   supp_errors = 'Y',
+                   convergence_count = FALSE)
+
+# get predictions
+preds_fb3 <- data.frame(temp = seq(min(fb3$temp), max(fb3$temp), length.out = 100))
+preds_fb3 <- broom::augment(mod_fb3, newdata = preds_fb3)
+
+#sk
+#sk1
+mod_sk1<-nls_multstart(cal.length~boatman_2017(temp=temp,max, tmin, tmax, a, b),data=sk1,iter=c(3,3,3,3,3),
+                   start_lower = get_start_vals(sk1$temp, sk1$cal.length, model_name = 'boatman_2017')-1,
+                  start_upper = get_start_vals(sk1$temp, sk1$cal.length, model_name = 'boatman_2017')+1,
+                   lower = get_lower_lims(sk1$temp, sk1$cal.length, model_name = 'boatman_2017'),
+                   upper = get_upper_lims(sk1$temp, sk1$cal.length, model_name = 'boatman_2017'),
+                   supp_errors = 'Y',
+                   convergence_count = FALSE)
+
+# get predictions
+preds_sk1 <- data.frame(temp = seq(min(sk1$temp), max(sk1$temp), length.out = 100))
+preds_sk1 <- broom::augment(mod_sk1, newdata = preds_sk1)
+
+#sk2
+mod_sk2<-nls_multstart(cal.length~boatman_2017(temp=temp,max, tmin, tmax, a, b),data=sk2,iter=c(3,3,3,3,3),
+                   start_lower = get_start_vals(sk2$temp, sk2$cal.length, model_name = 'boatman_2017')-1,
+                  start_upper = get_start_vals(sk2$temp, sk2$cal.length, model_name = 'boatman_2017')+1,
+                   lower = get_lower_lims(sk2$temp, sk2$cal.length, model_name = 'boatman_2017'),
+                   upper = get_upper_lims(sk2$temp, sk2$cal.length, model_name = 'boatman_2017'),
+                   supp_errors = 'Y',
+                   convergence_count = FALSE)
+
+# get predictions
+preds_sk2 <- data.frame(temp = seq(min(sk2$temp), max(sk2$temp), length.out = 100))
+preds_sk2 <- broom::augment(mod_sk2, newdata = preds_sk2)
+
+#sk3
+mod_sk3<-nls_multstart(cal.length~boatman_2017(temp=temp,max, tmin, tmax, a, b),data=sk3,iter=c(3,3,3,3,3),
+                   start_lower = get_start_vals(sk3$temp, sk3$cal.length, model_name = 'boatman_2017')-1,
+                  start_upper = get_start_vals(sk3$temp, sk3$cal.length, model_name = 'boatman_2017')+1,
+                   lower = get_lower_lims(sk3$temp, sk3$cal.length, model_name = 'boatman_2017'),
+                   upper = get_upper_lims(sk3$temp, sk3$cal.length, model_name = 'boatman_2017'),
+                   supp_errors = 'Y',
+                   convergence_count = FALSE)
+
+# get predictions
+preds_sk3 <- data.frame(temp = seq(min(sk3$temp), max(sk3$temp), length.out = 100))
+preds_sk3 <- broom::augment(mod_sk3, newdata = preds_sk3)
+
+#wp
+#wp1
+mod_wp1<-nls_multstart(cal.length~boatman_2017(temp=temp,max, tmin, tmax, a, b),data=wp1,iter=c(3,3,3,3,3),
+                   start_lower = get_start_vals(wp1$temp, wp1$cal.length, model_name = 'boatman_2017')-1,
+                  start_upper = get_start_vals(wp1$temp, wp1$cal.length, model_name = 'boatman_2017')+1,
+                   lower = get_lower_lims(wp1$temp, wp1$cal.length, model_name = 'boatman_2017'),
+                   upper = get_upper_lims(wp1$temp, wp1$cal.length, model_name = 'boatman_2017'),
+                   supp_errors = 'Y',
+                   convergence_count = FALSE)
+
+# get predictions
+preds_wp1 <- data.frame(temp = seq(min(wp1$temp), max(wp1$temp), length.out = 100))
+preds_wp1 <- broom::augment(mod_wp1, newdata = preds_wp1)
+
+#wp2
+mod_wp2<-nls_multstart(cal.length~boatman_2017(temp=temp,max, tmin, tmax, a, b),data=wp2,iter=c(3,3,3,3,3),
+                   start_lower = get_start_vals(wp2$temp, wp2$cal.length, model_name = 'boatman_2017')-1,
+                  start_upper = get_start_vals(wp2$temp, wp2$cal.length, model_name = 'boatman_2017')+1,
+                   lower = get_lower_lims(wp2$temp, wp2$cal.length, model_name = 'boatman_2017'),
+                   upper = get_upper_lims(wp2$temp, wp2$cal.length, model_name = 'boatman_2017'),
+                   supp_errors = 'Y',
+                   convergence_count = FALSE)
+
+# get predictions
+preds_wp2 <- data.frame(temp = seq(min(wp2$temp), max(wp2$temp), length.out = 100))
+preds_wp2 <- broom::augment(mod_wp2, newdata = preds_wp2)
+
+#wp3
+mod_wp3<-nls_multstart(cal.length~boatman_2017(temp=temp,max, tmin, tmax, a, b),data=wp3,iter=c(3,3,3,3,3),
+                   start_lower = get_start_vals(wp3$temp, wp3$cal.length, model_name = 'boatman_2017')-1,
+                  start_upper = get_start_vals(wp3$temp, wp3$cal.length, model_name = 'boatman_2017')+1,
+                   lower = get_lower_lims(wp3$temp, wp3$cal.length, model_name = 'boatman_2017'),
+                   upper = get_upper_lims(wp3$temp, wp3$cal.length, model_name = 'boatman_2017'),
+                   supp_errors = 'Y',
+                   convergence_count = FALSE)
+
+# get predictions
+preds_wp3 <- data.frame(temp = seq(min(wp3$temp), max(wp3$temp), length.out = 100))
+preds_wp3 <- broom::augment(mod_wp3, newdata = preds_wp3)
+
+#hm
+#hm1
+mod_hm1<-nls_multstart(cal.length~boatman_2017(temp=temp,max, tmin, tmax, a, b),data=hm1,iter=c(3,3,3,3,3),
+                   start_lower = get_start_vals(hm1$temp, hm1$cal.length, model_name = 'boatman_2017')-1,
+                  start_upper = get_start_vals(hm1$temp, hm1$cal.length, model_name = 'boatman_2017')+1,
+                   lower = get_lower_lims(hm1$temp, hm1$cal.length, model_name = 'boatman_2017'),
+                   upper = get_upper_lims(hm1$temp, hm1$cal.length, model_name = 'boatman_2017'),
+                   supp_errors = 'Y',
+                   convergence_count = FALSE)
+
+# get predictions
+preds_hm1 <- data.frame(temp = seq(min(hm1$temp), max(hm1$temp), length.out = 100))
+preds_hm1 <- broom::augment(mod_hm1, newdata = preds_hm1)
+
+#hm2
+mod_hm2<-nls_multstart(cal.length~boatman_2017(temp=temp,max, tmin, tmax, a, b),data=hm2,iter=c(3,3,3,3,3),
+                   start_lower = get_start_vals(hm2$temp, hm2$cal.length, model_name = 'boatman_2017')-1,
+                  start_upper = get_start_vals(hm2$temp, hm2$cal.length, model_name = 'boatman_2017')+1,
+                   lower = get_lower_lims(hm2$temp, hm2$cal.length, model_name = 'boatman_2017'),
+                   upper = get_upper_lims(hm2$temp, hm2$cal.length, model_name = 'boatman_2017'),
+                   supp_errors = 'Y',
+                   convergence_count = FALSE)
+
+# get predictions
+preds_hm2 <- data.frame(temp = seq(min(hm2$temp), max(hm2$temp), length.out = 100))
+preds_hm2 <- broom::augment(mod_hm2, newdata = preds_hm2)
+
+#hm3
+mod_hm3<-nls_multstart(cal.length~boatman_2017(temp=temp,max, tmin, tmax, a, b),data=hm3,iter=c(3,3,3,3,3),
+                   start_lower = get_start_vals(hm3$temp, hm3$cal.length, model_name = 'boatman_2017')-1,
+                  start_upper = get_start_vals(hm3$temp, hm3$cal.length, model_name = 'boatman_2017')+1,
+                   lower = get_lower_lims(hm3$temp, hm3$cal.length, model_name = 'boatman_2017'),
+                   upper = get_upper_lims(hm3$temp, hm3$cal.length, model_name = 'boatman_2017'),
+                   supp_errors = 'Y',
+                   convergence_count = FALSE)
+
+# get predictions
+preds_hm3 <- data.frame(temp = seq(min(hm3$temp), max(hm3$temp), length.out = 100))
+preds_hm3 <- broom::augment(mod_hm3, newdata = preds_hm3)
+
+#apply some metadata
+preds_gb1$pop<-"gb"
+preds_gb1$oce<-"a"
+preds_gb1$bin<-1
+
+preds_gb2$pop<-"gb"
+preds_gb2$oce<-"a"
+preds_gb2$bin<-2
+
+preds_gb3$pop<-"gb"
+preds_gb3$oce<-"a"
+preds_gb3$bin<-3
+
+preds_wh1$pop<-"wh"
+preds_wh1$oce<-"a"
+preds_wh1$bin<-1
+
+preds_wh2$pop<-"wh"
+preds_wh2$oce<-"a"
+preds_wh2$bin<-2
+
+preds_wh3$pop<-"wh"
+preds_wh3$oce<-"a"
+preds_wh3$bin<-3
+
+preds_oy1$pop<-"oy"
+preds_oy1$oce<-"a"
+preds_oy1$bin<-1
+
+preds_oy2$pop<-"oy"
+preds_oy2$oce<-"a"
+preds_oy2$bin<-2
+
+preds_oy3$pop<-"oy"
+preds_oy3$oce<-"a"
+preds_oy3$bin<-3
+
+preds_bf1$pop<-"bf"
+preds_bf1$oce<-"a"
+preds_bf1$bin<-1
+
+preds_bf2$pop<-"bf"
+preds_bf2$oce<-"a"
+preds_bf2$bin<-2
+
+preds_bf3$pop<-"bf"
+preds_bf3$oce<-"a"
+preds_bf3$bin<-3
+
+preds_fb1$pop<-"fb"
+preds_fb1$oce<-"a"
+preds_fb1$bin<-1
+
+preds_fb2$pop<-"fb"
+preds_fb2$oce<-"a"
+preds_fb2$bin<-2
+
+preds_fb3$pop<-"fb"
+preds_fb3$oce<-"a"
+preds_fb3$bin<-3
+
+preds_sk1$pop<-"sk"
+preds_sk1$oce<-"a"
+preds_sk1$bin<-1
+
+preds_sk2$pop<-"sk"
+preds_sk2$oce<-"a"
+preds_sk2$bin<-2
+
+preds_sk3$pop<-"sk"
+preds_sk3$oce<-"a"
+preds_sk3$bin<-3
+
+preds_wp1$pop<-"wp"
+preds_wp1$oce<-"a"
+preds_wp1$bin<-1
+
+preds_wp2$pop<-"wp"
+preds_wp2$oce<-"a"
+preds_wp2$bin<-2
+
+preds_wp3$pop<-"wp"
+preds_wp3$oce<-"a"
+preds_wp3$bin<-3
+
+preds_hm1$pop<-"hm"
+preds_hm1$oce<-"a"
+preds_hm1$bin<-1
+
+preds_hm2$pop<-"hm"
+preds_hm2$oce<-"a"
+preds_hm2$bin<-2
+
+preds_hm3$pop<-"hm"
+preds_hm3$oce<-"a"
+preds_hm3$bin<-3
+```
+
+
+## combine and plot models
+```{r}
+#combine predicted values into a single dataframe
+all.length.pred<-rbind(preds_gb1,preds_wh1,preds_oy1,preds_bf1,preds_fb1,preds_sk1,preds_wp1,preds_hm1,preds_gb2,preds_wh2,preds_oy2,preds_bf2,preds_fb2,preds_sk2,preds_wp2,preds_hm2,preds_gb3,preds_wh3,preds_oy3,preds_bf3,preds_fb3,preds_sk3,preds_wp3,preds_hm3)
+
+
+all.length.pred$population<-all.length.pred$pop
+all.length.pred$population<-factor(all.length.pred$population,levels=c("gb","wh","oy","bf","fb","sk","wp","hm"))
+
+all.length.pred$pop<-factor(all.length.pred$pop,levels=c("gb","wh","oy","bf","fb","sk","wp","hm"))
+
+
+all.length.pred$pop<-ifelse(all.length.pred$pop=="gb","Great Bay",ifelse(all.length.pred$pop=="wh","Woods Hole",ifelse(all.length.pred$pop=="oy","Oyster",ifelse(all.length.pred$pop=="bf","Beaufort",ifelse(all.length.pred$pop=="fb","Folly Beach",ifelse(all.length.pred$pop=="sk","Skidaway",ifelse(all.length.pred$pop=="wp","Willapa",ifelse(all.length.pred$pop=="hm","Humboldt",NA))))))))
+
+all.length.pred$pop<-as.factor(all.length.pred$pop)
+all.length.pred$pop<-factor(all.length.pred$pop,levels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"))
+
+#give growth alive same pop codes
+growth.alive$population<-ifelse(growth.alive$pop=="gb","Great Bay",ifelse(growth.alive$pop=="wh","Woods Hole",ifelse(growth.alive$pop=="oy","Oyster",ifelse(growth.alive$pop=="bf","Beaufort",ifelse(growth.alive$pop=="fb","Folly Beach",ifelse(growth.alive$pop=="sk","Skidaway",ifelse(growth.alive$pop=="wp","Willapa",ifelse(growth.alive$pop=="hm","Humboldt",NA))))))))
+
+growth.alive$pop<-as.factor(growth.alive$pop)
+growth.alive$population<-factor(growth.alive$pop,levels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"))
+growth.alive$pop<-factor(growth.alive$pop,levels=c("Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"))
+
+ggplot(all.length.pred,aes(x=temp,y=.fitted))+geom_line(aes(group=interaction(population,bin),x=temp,y=.fitted,color=population,linetype=population,size=population),size=1.5)+
+  ylab("Growth Rate (mm)")+xlab("Temperature (°C)")+theme_classic()+
+  scale_x_continuous(breaks=c(16,20,24,26,28,30))+
+  scale_linetype_manual(values=c(1,1,1,1,1,1,4,4),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
+  scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
+  scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+theme(text=element_text(family="arial",size=22))+geom_point(data=growth.alive,aes(x=temp,y=cal.length))+facet_wrap(pop~bin)
+
+ggplot(all.length.pred,aes(x=temp,y=.fitted))+geom_line(aes(group=interaction(population,bin),x=temp,y=.fitted,color=population,linetype=population,size=population),size=1.5)+
+  ylab("Growth Rate (mm)")+xlab("Temperature (°C)")+theme_classic()+
+  scale_x_continuous(breaks=c(16,20,24,26,28,30))+
+  scale_linetype_manual(values=c(1,1,1,1,1,1,4,4),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
+  scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
+  scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+theme(text=element_text(family="arial",size=22))+geom_point(data=growth.alive,aes(x=temp,y=cal.length))+facet_wrap(pop~.)
+```
+```{r,echo=F,warning=F}
+
+##unified breakpoints
+ggplot(all.length.pred,aes(x=temp,y=.fitted))+geom_line(aes(group=interaction(population,bin),x=temp,y=.fitted,color=population,linetype=population,size=population),size=1.5)+
+  ylab("Growth Rate (mm)")+xlab("Temperature (°C)")+theme_classic()+
+  scale_x_continuous(breaks=c(16,20,24,26,28,30))+
+  scale_linetype_manual(values=c(1,1,1,1,1,1,4,4),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
+  scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
+  scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+theme(text=element_text(family="arial",size=22))
+
+ggplot(all.length.pred,aes(x=temp,y=.fitted))+geom_line(aes(group=interaction(population,bin),x=temp,y=.fitted,color=population,linetype=population,size=population),size=1.5)+
+  ylab("Growth Rate (mm)")+xlab("Temperature (°C)")+theme_classic()+
+  scale_x_continuous(breaks=c(16,20,24,26,28,30))+
+  scale_linetype_manual(values=c(1,1,1,1,1,1,4,4),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
+  scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
+  scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+theme(text=element_text(family="arial",size=22))+geom_point(data=growth.alive,aes(x=temp,y=cal.length))+facet_wrap(pop~bin)
+
+##facetted with points
+all.length.pred<-all.length.pred%>%
+  mutate(pop = fct_relevel(pop, 
+            "Great Bay","Woods Hole","Oyster","Beaufort","Folly Beach","Skidaway","Willapa","Humboldt"))
+
+
+#for figure
+ggplot(all.length.pred,aes(x=temp,y=.fitted))+geom_line(aes(group=interaction(bin,population),x=temp,y=.fitted,color=population,linetype=population,size=population))+
+  ylab("growth rate (mm)")+xlab("temperature (°C)")+theme_classic()+
+  scale_x_continuous(breaks=c(16,20,24,26,28,30))+
+  scale_linetype_manual(values=c(1,1,1,1,1,1,4,4),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
+  scale_size_manual(values=c(1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+
+  scale_color_manual(values=c("dark violet","navy","forest green","gold","dark orange","tomato","dark violet","navy"),labels=c("Great Bay, NH","Woods Hole, MA","Oyster, VA","Beaufort, NC","Folly Beach, SC","Skidaway, GA","Willapa, WA","Humboldt, CA"),name="Population")+theme(text=element_text(family="Times",size=22),axis.text=element_text(color="black",size=22))+theme(text=element_text(family="Times",size=22))
+
+```
+
+We need to provide tests for these predictions
+ 
+
+## Breakpoint analysis, broken stick
+
+To be able to complete statistical analysis of the differences in TPC curves, I extracted the x and y componenets of each curve to give me the thermal optima and maximal trait performance, respectively. This extraction is silenced in code. Once we have extracted the thermal optima and maximal trait performance, we can move on to the relationship between environment and each breakpoint componenet. 
+
+```{r,include=F,echo=F,warning=F}
+brkpts<-data.frame(matrix(,nrow=24,ncol=21))
+colnames(brkpts)<-c("pop","brkptx","brkpty","lat","mean","s.mean","q.mean","t.mean","oce","brkptx_se","se_lower","se_higher","brkpty_se","max","NA","brkptyq","brkptxq","seasonlength10","seasonlength12","bin","site")
+
+brkpts$pop<-c(rep("Willapa",3),rep("Humboldt",3),rep("Great Bay",3),rep("Woods Hole",3),rep("Oyster",3),rep("Beaufort",3),rep("Folly Beach",3),rep("Skidaway",3))
+brkpts$site<-c("wp1","wp2","wp3","hm1","hm2","hm3","gb1","gb2","gb3","wh1","wh2","wh3","oy1","oy2","oy3","bf1","bf2","bf3","fb1","fb2","fb3","sk1","sk2","sk3")
+
+brkpts[1,2]<-get_topt(mod_wp1)
+brkpts[2,2]<-get_topt(mod_wp2)
+brkpts[3,2]<-get_topt(mod_wp3)
+brkpts[4,2]<-get_topt(mod_hm1)
+brkpts[5,2]<-get_topt(mod_hm2)
+brkpts[6,2]<-get_topt(mod_hm3)
+brkpts[7,2]<-get_topt(mod_gb1)
+brkpts[8,2]<-get_topt(mod_gb2)
+brkpts[9,2]<-get_topt(mod_gb3)
+brkpts[10,2]<-get_topt(mod_wh1)
+brkpts[11,2]<-get_topt(mod_wh2)
+brkpts[12,2]<-get_topt(mod_wh3)
+brkpts[13,2]<-get_topt(mod_oy1)
+brkpts[14,2]<-get_topt(mod_oy2)
+brkpts[15,2]<-get_topt(mod_oy3)
+brkpts[16,2]<-get_topt(mod_bf1)
+brkpts[17,2]<-get_topt(mod_bf2)
+brkpts[18,2]<-get_topt(mod_bf3)
+brkpts[19,2]<-get_topt(mod_fb1)
+brkpts[20,2]<-get_topt(mod_fb2)
+brkpts[21,2]<-get_topt(mod_fb3)
+brkpts[22,2]<-get_topt(mod_sk1)
+brkpts[23,2]<-get_topt(mod_sk2)
+brkpts[24,2]<-get_topt(mod_sk3)
+
+
+brkpts[1,3]<-get_rmax(mod_wp1)
+brkpts[2,3]<-get_rmax(mod_wp2)
+brkpts[3,3]<-get_rmax(mod_wp3)
+brkpts[4,3]<-get_rmax(mod_hm1)
+brkpts[5,3]<-get_rmax(mod_hm2)
+brkpts[6,3]<-get_rmax(mod_hm3)
+brkpts[7,3]<-get_rmax(mod_gb1)
+brkpts[8,3]<-get_rmax(mod_gb2)
+brkpts[9,3]<-get_rmax(mod_gb3)
+brkpts[10,3]<-get_rmax(mod_wh1)
+brkpts[11,3]<-get_rmax(mod_wh2)
+brkpts[12,3]<-get_rmax(mod_wh3)
+brkpts[13,3]<-get_rmax(mod_oy1)
+brkpts[14,3]<-get_rmax(mod_oy2)
+brkpts[15,3]<-get_rmax(mod_oy3)
+brkpts[16,3]<-get_rmax(mod_bf1)
+brkpts[17,3]<-get_rmax(mod_bf2)
+brkpts[18,3]<-get_rmax(mod_bf3)
+brkpts[19,3]<-get_rmax(mod_fb1)
+brkpts[20,3]<-get_rmax(mod_fb2)
+brkpts[21,3]<-get_rmax(mod_fb3)
+brkpts[22,3]<-get_rmax(mod_sk1)
+brkpts[23,3]<-get_rmax(mod_sk2)
+brkpts[24,3]<-get_rmax(mod_sk3)
+
+
+#lat
+brkpts$lat<-ifelse(brkpts$pop=="Beaufort",34.819,ifelse(brkpts$pop=="Folly Beach",32.660525,
+                                                        ifelse(brkpts$pop=="Great Bay",43.089589,ifelse(brkpts$pop=="Humboldt",40.849448,ifelse(brkpts$pop=="Oyster",
+                                                                                                                                                37.288562,ifelse(brkpts$pop=="Woods Hole",41.57687,ifelse(brkpts$pop=="Willapa",46.5007,ifelse(brkpts$pop=="Skidaway",31.970
+,NA))))))))
+
+means<-data.frame(with(temp,tapply(WTMP,site,mean)))
+
+#means
+brkpts[1,5]<-q[6,4]
+brkpts[2,5]<-q[6,4]
+brkpts[3,5]<-q[6,4]
+brkpts[4,5]<-q[7,4]
+brkpts[5,5]<-q[7,4]
+brkpts[6,5]<-q[7,4]
+brkpts[7,5]<-q[1,4]
+brkpts[8,5]<-q[1,4]
+brkpts[9,5]<-q[1,4]
+brkpts[10,5]<-q[2,4]
+brkpts[11,5]<-q[2,4]
+brkpts[12,5]<-q[2,4]
+brkpts[13,5]<-q[3,4]
+brkpts[14,5]<-q[3,4]
+brkpts[15,5]<-q[3,4]
+brkpts[16,5]<-q[4,4]
+brkpts[17,5]<-q[4,4]
+brkpts[18,5]<-q[4,4]
+brkpts[19,5]<-q[5,4]
+brkpts[20,5]<-q[5,4]
+brkpts[21,5]<-q[5,4]
+brkpts[22,5]<-q[8,4]
+brkpts[23,5]<-q[8,4]
+brkpts[24,5]<-q[8,4]
+
+
+#s.mean
+brkpts[1,6]<-q[6,5]
+brkpts[2,6]<-q[6,5]
+brkpts[3,6]<-q[6,5]
+brkpts[4,6]<-q[7,5]
+brkpts[5,6]<-q[7,5]
+brkpts[6,6]<-q[7,5]
+brkpts[7,6]<-q[1,5]
+brkpts[8,6]<-q[1,5]
+brkpts[9,6]<-q[1,5]
+brkpts[10,6]<-q[2,5]
+brkpts[11,6]<-q[2,5]
+brkpts[12,6]<-q[2,5]
+brkpts[13,6]<-q[3,5]
+brkpts[14,6]<-q[3,5]
+brkpts[15,6]<-q[3,5]
+brkpts[16,6]<-q[4,5]
+brkpts[17,6]<-q[4,5]
+brkpts[18,6]<-q[4,5]
+brkpts[19,6]<-q[5,5]
+brkpts[20,6]<-q[5,5]
+brkpts[21,6]<-q[5,5]
+brkpts[22,6]<-q[8,5]
+brkpts[23,6]<-q[8,5]
+brkpts[24,6]<-q[8,5]
+
+
+
+#q.mean
+brkpts[1,7]<-q[6,2]
+brkpts[2,7]<-q[6,2]
+brkpts[3,7]<-q[6,2]
+brkpts[4,7]<-q[7,2]
+brkpts[5,7]<-q[7,2]
+brkpts[6,7]<-q[7,2]
+brkpts[7,7]<-q[1,2]
+brkpts[8,7]<-q[1,2]
+brkpts[9,7]<-q[1,2]
+brkpts[10,7]<-q[2,2]
+brkpts[11,7]<-q[2,2]
+brkpts[12,7]<-q[2,2]
+brkpts[13,7]<-q[3,2]
+brkpts[14,7]<-q[3,2]
+brkpts[15,7]<-q[3,2]
+brkpts[16,7]<-q[4,2]
+brkpts[17,7]<-q[4,2]
+brkpts[18,7]<-q[4,2]
+brkpts[19,7]<-q[5,2]
+brkpts[20,7]<-q[5,2]
+brkpts[21,7]<-q[5,2]
+brkpts[22,7]<-q[8,2]
+brkpts[23,7]<-q[8,2]
+brkpts[24,7]<-q[8,2]
+
+
+
+#t.mean
+brkpts[1,8]<-q[6,3]
+brkpts[2,8]<-q[6,3]
+brkpts[3,8]<-q[6,3]
+brkpts[4,8]<-q[7,3]
+brkpts[5,8]<-q[7,3]
+brkpts[6,8]<-q[7,3]
+brkpts[7,8]<-q[1,3]
+brkpts[8,8]<-q[1,3]
+brkpts[9,8]<-q[1,3]
+brkpts[10,8]<-q[2,3]
+brkpts[11,8]<-q[2,3]
+brkpts[12,8]<-q[2,3]
+brkpts[13,8]<-q[3,3]
+brkpts[14,8]<-q[3,3]
+brkpts[15,8]<-q[3,3]
+brkpts[16,8]<-q[4,3]
+brkpts[17,8]<-q[4,3]
+brkpts[18,8]<-q[4,3]
+brkpts[19,8]<-q[5,3]
+brkpts[20,8]<-q[5,3]
+brkpts[21,8]<-q[5,3]
+brkpts[22,8]<-q[8,3]
+brkpts[23,8]<-q[8,3]
+brkpts[24,8]<-q[8,3]
+
+
+#max
+brkpts[1,14]<-q[6,4]
+brkpts[2,14]<-q[6,4]
+brkpts[3,14]<-q[6,4]
+brkpts[4,14]<-q[7,4]
+brkpts[5,14]<-q[7,4]
+brkpts[6,14]<-q[7,4]
+brkpts[7,14]<-q[1,4]
+brkpts[8,14]<-q[1,4]
+brkpts[9,14]<-q[1,4]
+brkpts[10,14]<-q[2,4]
+brkpts[11,14]<-q[2,4]
+brkpts[12,14]<-q[2,4]
+brkpts[13,14]<-q[3,4]
+brkpts[14,14]<-q[3,4]
+brkpts[15,14]<-q[3,4]
+brkpts[16,14]<-q[4,4]
+brkpts[17,14]<-q[4,4]
+brkpts[18,14]<-q[4,4]
+brkpts[19,14]<-q[5,4]
+brkpts[20,14]<-q[5,4]
+brkpts[21,14]<-q[5,4]
+brkpts[22,14]<-q[8,4]
+brkpts[23,14]<-q[8,4]
+brkpts[24,14]<-q[8,4]
+
+
+#seasonlength10
+brkpts[1,18]<-q[6,7]
+brkpts[2,18]<-q[6,7]
+brkpts[3,18]<-q[6,7]
+brkpts[4,18]<-q[7,7]
+brkpts[5,18]<-q[7,7]
+brkpts[6,18]<-q[7,7]
+brkpts[7,18]<-q[1,7]
+brkpts[8,18]<-q[1,7]
+brkpts[9,18]<-q[1,7]
+brkpts[10,18]<-q[2,7]
+brkpts[11,18]<-q[2,7]
+brkpts[12,18]<-q[2,7]
+brkpts[13,18]<-q[3,7]
+brkpts[14,18]<-q[3,7]
+brkpts[15,18]<-q[3,7]
+brkpts[16,18]<-q[4,7]
+brkpts[17,18]<-q[4,7]
+brkpts[18,18]<-q[4,7]
+brkpts[19,18]<-q[5,7]
+brkpts[20,18]<-q[5,7]
+brkpts[21,18]<-q[5,7]
+brkpts[22,18]<-q[8,7]
+brkpts[23,18]<-q[8,7]
+brkpts[24,18]<-q[8,7]
+
+
+#seasonlength12
+#seasonlength10
+brkpts[1,19]<-q[6,8]
+brkpts[2,19]<-q[6,8]
+brkpts[3,19]<-q[6,8]
+brkpts[4,19]<-q[7,8]
+brkpts[5,19]<-q[7,8]
+brkpts[6,19]<-q[7,8]
+brkpts[7,19]<-q[1,8]
+brkpts[8,19]<-q[1,8]
+brkpts[9,19]<-q[1,8]
+brkpts[10,19]<-q[2,8]
+brkpts[11,19]<-q[2,8]
+brkpts[12,19]<-q[2,8]
+brkpts[13,19]<-q[3,8]
+brkpts[14,19]<-q[3,8]
+brkpts[15,19]<-q[3,8]
+brkpts[16,19]<-q[4,8]
+brkpts[17,19]<-q[4,8]
+brkpts[18,19]<-q[4,8]
+brkpts[19,19]<-q[5,8]
+brkpts[20,19]<-q[5,8]
+brkpts[21,19]<-q[5,8]
+brkpts[22,19]<-q[8,8]
+brkpts[23,19]<-q[8,8]
+brkpts[24,19]<-q[8,8]
+
+#brkptx_se
+#brkpts[1,10]<-seg.wp$psi[[3]]
+#brkpts[2,10]<-seg.hm$psi[[3]]
+#brkpts[3,10]<-seg.gb$psi[[3]]
+#brkpts[4,10]<-seg.wh$psi[[3]]
+#brkpts[5,10]<-seg.oy$psi[[3]]
+#brkpts[6,10]<-seg.bf$psi[[3]]
+#brkpts[7,10]<-seg.fb$psi[[3]]
+#brkpts[8,10]<-seg.sk$psi[[3]]
+#
+##lower bounds brkptx_se2
+#brkpts[1,11]<-brkpts[1,2]-brkpts[1,10]
+#brkpts[2,11]<-brkpts[2,2]-brkpts[2,10]
+#brkpts[3,11]<-brkpts[3,2]-brkpts[3,10]
+#brkpts[4,11]<-brkpts[4,2]-brkpts[4,10]
+#brkpts[5,11]<-brkpts[5,2]-brkpts[5,10]
+#brkpts[6,11]<-brkpts[6,2]-brkpts[6,10]
+#brkpts[7,11]<-brkpts[7,2]-brkpts[7,10]
+#brkpts[8,11]<-brkpts[8,2]-brkpts[8,10]
+#
+##upper bounds brkpts_se
+#brkpts[1,12]<-brkpts[1,2]+brkpts[1,10]
+#brkpts[2,12]<-brkpts[2,2]+brkpts[2,10]
+#brkpts[3,12]<-brkpts[3,2]+brkpts[3,10]
+#brkpts[4,12]<-brkpts[4,2]+brkpts[4,10]
+#brkpts[5,12]<-brkpts[5,2]+brkpts[5,10]
+#brkpts[6,12]<-brkpts[6,2]+brkpts[6,10]
+#brkpts[7,12]<-brkpts[7,2]+brkpts[7,10]
+#brkpts[8,12]<-brkpts[8,2]+brkpts[8,10]
+#
+##se for y value calculation
+#brkpts[1,13]<-(brkpts[1,12]*coef(seg.wp)[[2]])+(coef(seg.wp)[[1]])
+#brkpts[2,13]<-(brkpts[2,12]*coef(seg.hm)[[2]])+(coef(seg.hm)[[1]])
+#brkpts[3,13]<-(brkpts[3,12]*coef(seg.gb)[[2]])+(coef(seg.gb)[[1]])
+#brkpts[4,13]<-(brkpts[4,12]*coef(seg.wh)[[2]])+(coef(seg.wh)[[1]])
+#brkpts[5,13]<-(brkpts[5,12]*coef(seg.oy)[[2]])+(coef(seg.oy)[[1]])
+#brkpts[6,13]<-(brkpts[6,12]*coef(seg.bf)[[2]])+(coef(seg.bf)[[1]])
+#brkpts[7,13]<-(brkpts[7,12]*coef(seg.fb)[[2]])+(coef(seg.fb)[[1]])
+#brkpts[8,13]<-(brkpts[8,12]*coef(seg.sk)[[2]])+(coef(seg.sk)[[1]])
+
+
+
+
+brkpts$oce<-ifelse(brkpts$pop=="Beaufort","a",ifelse(brkpts$pop=="Folly Beach","a",ifelse(brkpts$pop=="Great Bay","a",ifelse(brkpts$pop=="Humboldt","p",ifelse(brkpts$pop=="Oyster","a",ifelse(brkpts$pop=="Tomales","p",ifelse(brkpts$pop=="Woods Hole","a",ifelse(brkpts$pop=="Willapa","p",ifelse(brkpts$pop=="Skidaway","a",NA)))))))))
+
+brkpts$seasonlength10<-as.numeric(brkpts$seasonlength10)
+brkpts$seasonlength12<-as.numeric(brkpts$seasonlength12)
+brkpts$pop<-as.factor(brkpts$pop)
+
+brkpts$spring<-NA
+brkpts[1,22]<-q[6,9]#WP
+brkpts[2,22]<-q[6,9]#WP
+brkpts[3,22]<-q[6,9]#WP
+brkpts[4,22]<-q[7,9]#hm
+brkpts[5,22]<-q[7,9]#hm
+brkpts[6,22]<-q[7,9]#hm
+brkpts[7,22]<-q[1,9]#gb
+brkpts[8,22]<-q[1,9]#gb
+brkpts[9,22]<-q[1,9]#gb
+brkpts[10,22]<-q[2,9]
+brkpts[11,22]<-q[2,9]
+brkpts[12,22]<-q[2,9]
+brkpts[13,22]<-q[3,9]
+brkpts[14,22]<-q[3,9]
+brkpts[15,22]<-q[3,9]
+brkpts[16,22]<-q[4,9]
+brkpts[17,22]<-q[4,9]
+brkpts[18,22]<-q[4,9]
+brkpts[19,22]<-q[5,9]
+brkpts[20,22]<-q[5,9]
+brkpts[21,22]<-q[5,9]
+brkpts[22,22]<-q[8,9]
+brkpts[23,22]<-q[8,9]
+brkpts[24,22]<-q[8,9]
+
+
+brkpts$spring2<-NA
+brkpts[1,23]<-q[6,10]
+brkpts[2,23]<-q[6,10]
+brkpts[3,23]<-q[6,10]
+brkpts[4,23]<-q[7,10]
+brkpts[5,23]<-q[7,10]
+brkpts[6,23]<-q[7,10]
+brkpts[7,23]<-q[1,10]
+brkpts[8,23]<-q[1,10]
+brkpts[9,23]<-q[1,10]
+brkpts[10,23]<-q[2,10]
+brkpts[11,23]<-q[2,10]
+brkpts[12,23]<-q[2,10]
+brkpts[13,23]<-q[3,10]
+brkpts[14,23]<-q[3,10]
+brkpts[15,23]<-q[3,10]
+brkpts[16,23]<-q[4,10]
+brkpts[17,23]<-q[4,10]
+brkpts[18,23]<-q[4,10]
+brkpts[19,23]<-q[5,10]
+brkpts[20,23]<-q[5,10]
+brkpts[21,23]<-q[5,10]
+brkpts[22,23]<-q[8,10]
+brkpts[23,23]<-q[8,10]
+brkpts[24,23]<-q[8,10]
+
+brkpts$bin<-rep(1:3,tiems=8)
+
+#write.csv(brkpts,"C:/Users/drewv/Documents/UMASS/data/length_brkpts.csv",row.names=F)
+
+
+#correlative environmental plots
+#mean
+mean_plot<-ggplot(brkpts,aes(x=lat,y=mean))+geom_point(aes(color=oce,shape=oce),size=3)+theme_classic()+theme(text=element_text(family="arial",size=22))+
+    scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
+    scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+ylab("Mean (°C)")+xlab("Latitude")+
+  scale_shape_manual(labels=c("Atlantic","Pacific"),name="Ocean",values=c(16,17))
+summary(lm(mean~lat,brkpts,fmaily="gaussian"))
+#season length
+season_plot<-ggplot(brkpts,aes(x=lat,y=seasonlength10))+geom_point(aes(color=oce,shape=oce),size=3)+theme_classic()+theme(text=element_text(family="arial",size=22))+
+    scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
+    scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+ylab("Season Length (10 °C)")+xlab("Latitude")+
+    scale_shape_manual(labels=c("Atlantic","Pacific"),name="Ocean",values=c(16,17))
+summary(lm(seasonlength10~lat,brkpts,fmaily="gaussian"))
+
+#maximal spawning period
+maxspawn_plot<-ggplot(brkpts,aes(x=lat,y=spring2))+geom_point(aes(color=oce,shape=oce),size=3)+theme_classic()+theme(text=element_text(family="arial",size=22))+
+    scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
+    scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+ylab("Maximum Spawning Period Mean (°C)")+xlab("Latitude")+
+    scale_shape_manual(labels=c("Atlantic","Pacific"),name="Ocean",values=c(16,17))
+summary(lm(spring2~lat,brkpts,fmaily="gaussian"))
+
+
+#ggsave(filename="mean_plot.svg",width=5,height=4,dpi=300,units="in",device="svg")
+#ggsave(filename="season_plot.svg",season_plot,width=5,height=4,dpi=300,units="in",device="svg")
+#ggsave(filename="maxspawn_plot.svg",maxspawn_plot,width=5,height=4,dpi=300,units="in",device="svg")
+
+#chart.Correlation(brkpts[,c(4:8,14,18:21)],histogram=TRUE,method='pearson')
+#peras<-brkpts[,c(4:8,14,18:21)]
+#library(ppcor)
+
+#cor(peras,method='pearson')
+
+```
+
+## Add CIs around MTP and Topt
+
+```{r}
+
+ci_extra_params_all<-read.csv(here::here("data/ci_extra_params_all.csv"))
+
+rmax<-filter(ci_extra_params_all,param=="rmax")
+rmax$site<-rmax$code
+rmax<-rmax[,c(3:4,6,10)]
+colnames(rmax)<-c("conf_lower_rmax","conf_upper_rmax","estimate_rmax","site")
+topt<-filter(ci_extra_params_all,param=="topt")
+topt$site<-topt$code
+topt<-topt[,c(3:4,6,10)]
+colnames(topt)<-c("conf_lower_topt","conf_upper_topt","estimate_topt","site")
+brkpts<-merge(brkpts,rmax,by=("site"))
+brkpts<-merge(brkpts,topt,by=("site"))
+
+brkpts<-brkpts[,-c(11:14,16:18)]
+
+```
+
+### Maximum trait Performance (y axis), broken stick
+
+The AIC table below tells us which environmental predictors best describe the relationship of maximal trait performance across populations. 
+
+```{r,include=T,echo=F,warning=F}
+##Maximal trait performance (y)
+mods.brk<-list(
+  "nullo"=glm(brkpty~1,brkpts,family="gaussian"),
+  "lat"=glm(brkpty~lat,brkpts,family="gaussian"),
+  "mean"=glm(brkpty~mean,brkpts,family="gaussian"),
+  "s.mean"=glm(brkpty~s.mean,brkpts,family="gaussian"),
+  "q.mean"=glm(brkpty~q.mean,brkpts,family="gaussian"),
+  "t.mean"=glm(brkpty~t.mean,brkpts,family="gaussian"),
+  "seasonlength10"=glm(brkpty~seasonlength10,brkpts,family="gaussian"),
+  "seasonlength12"=glm(brkpty~seasonlength12,brkpts,family="gaussian"),
+  "omax"=glm(brkpty~max,brkpts,family="gaussian"),
+  "spring"=glm(brkpty~spring,brkpts,family="gaussian"),
+   "spring2"=glm(brkpty~spring2,brkpts,family="gaussian"))
+
+aictab(mods.brk)
+```
+
+Here, it appears that the season length as calculated at 10C without ocean is the best predictor. This is followed by latitude, mean sst, and season length calculated at 12.5C, all without ocean. Latitude doesn't tell us much about the environment, so let's take a look at how both season length metrics we calculated perform when calculating maximal trait performance.
+
+#### Maximal trait performance, season length = 10 C
+
+```{r,warning=F,echo=F}
+
+brkptym2<-(lm(brkpty~seasonlength10,brkpts))
+summary(brkptym2) 
+
+ggplot(brkpts,aes(x=seasonlength10,y=brkpty,label=site))+
+  geom_point(size=3,aes(color=oce,shape=oce))+theme_classic()+
+  ylab("Maximal Growth (mm)")+
+  xlab("Season Length (days), 10°C")+
+  
+  theme(text=element_text(family="arial",size=22))+
+    scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
+    scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
+  geom_smooth(method='lm',se=T,color="black")+scale_shape_manual(labels=c("Atlantic","Pacific"),name="Ocean",values=c(16,17))+geom_errorbar(aes(ymin=conf_lower_rmax, ymax=conf_upper_rmax),width=4)+geom_text()
+
+```
+
+
+When we look at season length when calculated at 10C, we see a significant relationship between maximal trait performance and season length. This trend becomes less signficant when we calculate it at 12.5C, mostly because our Pacific sites "ungroup" from the Atlantic sites. At 10C season length, we could be seeing possible countergradient variation! The one weird point in the Atlantic is Woods Hole. Anecdotal, I could attribute this to the very hot local conditions in the estuary, but can't say for sure. 
+
+But what about the thermal optima?
+
+### Thermal Optima (Breakpoint X axis), broken stick
+
+```{r,include=T,echo=F,warning=F}
+
+mods.brkx<-list(
+  "nullo"=glm(brkptx~1,brkpts,family="gaussian"),
+  "lat"=glm(brkptx~lat,brkpts,family="gaussian"),
+  "mean"=glm(brkptx~mean,brkpts,family="gaussian"),
+  "s.mean"=glm(brkptx~s.mean,brkpts,family="gaussian"),
+  "q.mean"=glm(brkptx~q.mean,brkpts,family="gaussian"),
+  "t.mean"=glm(brkptx~t.mean,brkpts,family="gaussian"),
+  "seasonlength10"=glm(brkptx~seasonlength10,brkpts,family="gaussian"),
+  "seasonlength12"=glm(brkptx~seasonlength12,brkpts,family="gaussian"),
+  "omax"=glm(brkptx~max,brkpts,family="gaussian"),
+  "spring"=glm(brkptx~spring,brkpts,family="gaussian"),
+  "spring2"=glm(brkptx~spring2,brkpts,family="gaussian")
+  )
+
+aictab(mods.brkx)
+
+brkptym<-lm(brkptx~spring,brkpts)
+summary(brkptym)
+
+ggplot(brkpts,aes(x=spring,y=brkptx,label = site))+
+  geom_point(size=3,aes(color=oce,shape=oce))+geom_smooth(method="lm",se=T,color="black")+theme_classic()+xlab("spawning temperature (°C)")+
+  theme(text=element_text(family="Times",size=22),axis.text=element_text(family="Times",size=22,color="black"),legend.title = element_blank())+
+  scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
+  scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
+  scale_shape_manual(labels=c("Atlantic","Pacific"),name="Ocean",values=c(16,17))+ylab("Thermal Optima")+ylab("Topt (°C)")+geom_errorbar(aes(ymin=conf_lower_topt, ymax=conf_upper_topt), width=.1)+geom_text(check_overlap = TRUE)
+  
+#is mean multicollinear with seasonlength?
+testm<-lm(brkptx~seasonlength10+mean,brkpts)
+car::vif(testm)
+
+```
+
+
+Here, mean tempeature is the best predictor. However, season length 10 is also well-supported, so for consistency sake I present season length 10. There is no signficant pattern between season length and thermal optima (none with mean temp either). I can attribute this insignicance mostly to the presence of the Woods Hole population. If we remove this, the trend becomes slightly more signficant. It is worth pointing out this point and that because of our observations, we could attribute this outlier to other environmental effects, although I don't think we can actually eliminate it from analysis. 
+
+#### Sensitivity analysis
+
+Woods Hole seems to be an outlier for this pattern of decreasing thermal optima with season length. This is possibly due to very local-level effects of where we collected the woods hole population. what would happen if we remove it?
+
+```{r,include=T,echo=F,warning=F}
+
+#sensitivity analysis - exclude woods hole
+brkpts_wh<-filter(brkpts,oce!="p") #maintains signficance
+#brkpts_wh<-filter(brkpts,pop!="Woods Hole") # drops out signficance
+
+mods.brkx_wh<-list(
+  "nullo"=glm(brkpty~1,brkpts_wh,family="gaussian"),
+    "lat"=glm(brkpty~lat,brkpts_wh,family="gaussian"),
+  "mean"=glm(brkpty~mean,brkpts_wh,family="gaussian"),
+  "s.mean"=glm(brkpty~s.mean,brkpts_wh,family="gaussian"),
+  "q.mean"=glm(brkpty~q.mean,brkpts_wh,family="gaussian"),
+  "t.mean"=glm(brkpty~t.mean,brkpts_wh,family="gaussian"),
+  "seasonlength10"=glm(brkpty~seasonlength10,brkpts_wh,family="gaussian"),
+  "seasonlength12"=glm(brkpty~seasonlength12,brkpts_wh,family="gaussian"),
+  "max"=glm(brkpty~max,brkpts_wh,family="gaussian"),
+  "spring"=glm(brkpty~spring,brkpts_wh,family="gaussian"),
+  "spring2"=glm(brkpty~spring2,brkpts_wh,family="gaussian")
+  )
+
+aictab(mods.brkx_wh)
+
+brkptym_wh<-lm(brkpty~seasonlength10,brkpts_wh)
+summary(brkptym_wh)
+
+ggplot(brkpts_wh,aes(x=seasonlength10,y=brkpty))+
+  geom_point(size=3,aes(color=oce))+geom_smooth(method="lm",se=F,color="black")+theme_classic()+
+  ylab("Thermal Optima")+
+  xlab("Season Length (10c)")+
+  theme(text=element_text(family="arial",size=22))+
+  scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
+  scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))
+
+
+
+mods.brky2<-list(
+  "nullo"=glm(brkptx~1,brkpts_wh,family="gaussian"),
+  "lat"=glm(brkptx~lat,brkpts_wh,family="gaussian"),
+  "mean"=glm(brkptx~mean,brkpts_wh,family="gaussian"),
+  "s.mean"=glm(brkptx~s.mean,brkpts_wh,family="gaussian"),
+  "q.mean"=glm(brkptx~q.mean,brkpts_wh,family="gaussian"),
+  "t.mean"=glm(brkptx~t.mean,brkpts_wh,family="gaussian"),
+  "seasonlength10"=glm(brkptx~seasonlength10,brkpts_wh,family="gaussian"),
+  "seasonlength12"=glm(brkptx~seasonlength12,brkpts_wh,family="gaussian"),
+  "omax"=glm(brkptx~max,brkpts_wh,family="gaussian"),
+  "spring"=glm(brkptx~spring,brkpts_wh,family="gaussian"),
+  "spring2"=glm(brkptx~spring2,brkpts_wh,family="gaussian")
+  )
+
+aictab(mods.brky2)
+
+brkptym2<-lm(brkptx~spring,brkpts_wh)
+summary(brkptym2)
+
+ggplot(brkpts_wh,aes(x=spring,y=brkptx))+
+  geom_point(size=3,aes(color=oce,shape=oce))+geom_smooth(method="lm",se=F,color="black")+theme_classic()+xlab("spawning temperature (°C)")+
+  theme(text=element_text(family="Times",size=22),axis.text=element_text(family="Times",size=22,color="black"),legend.title = element_blank())+
+  scale_color_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
+  scale_fill_manual(labels=c("Atlantic","Pacific"),name="Ocean", values=c('red','blue'))+
+  scale_shape_manual(labels=c("Atlantic","Pacific"),name="Ocean",values=c(16,17))+ylab("Thermal Optima")
+
+```
+
+With Woods Hole dropped, we see a better indication of a negative relationship between season length and optima. We probably can't justify droppping Woods Hole, but this is good to know. 
+
+
+```{r,include=F}
+
+#brkpts$pop<-unlist(brkpts$pop)
+#write.csv(brkpts,"C:/Users/drewv/Documents/UMASS/data/length_brkpts.csv",row.names=F)
+```
+
+
