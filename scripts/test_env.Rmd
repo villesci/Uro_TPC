@@ -1,0 +1,658 @@
+---
+title: "Enviro data testing"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(here)
+library(tidyverse)
+library(tabulizer)
+library(lubridate)
+```
+
+#What is this document?
+
+This R markdown file displays the environmental data from each site that we used to calculate different environmental parameters. We include this document to 1) visually display each site's data and its temporal range and quality, and 2) show the evidence for choosing certain environmental data sources over others based on data quality.
+
+# Great Bay
+
+### Jackson marine lab data will take too long. Here's NERRS data from center bay, pretty close by
+
+```{r}
+gb<-read.csv(here::here("data/test_env/gb/GRBGBWQ.csv"))
+gb<-gb[,c(3,7)]
+gb$rdate<-as.POSIXct(gb$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+gb<-na.omit(gb)
+gb$WTMP<-gb$Temp
+gb<-gb[,c(3,4)]
+gb$site<-"gb"
+
+ggplot(gb,aes(x=rdate,y=WTMP))+geom_point()
+mean(gb$WTMP)
+max(gb$WTMP)
+```
+# Woods Hole
+
+### Woods hole long term data is clean and useable. Same source as original analysis. 
+```{r,echo=F,warning=F}
+wh2020<-read.delim(here::here("data/test_env/wh/bzbm3h2020.txt"),sep = "", dec = ".")
+wh2019<-read.delim(here::here("data/test_env/wh/bzbm3h2019.txt"),sep = "", dec = ".")
+wh2018<-read.delim(here::here("data/test_env/wh/bzbm3h2018.txt"),sep = "", dec = ".")
+wh2017<-read.delim(here::here("data/test_env/wh/bzbm3h2017.txt"),sep = "", dec = ".")
+wh2016<-read.delim(here::here("data/test_env/wh/bzbm3h2016.txt"),sep = "", dec = ".")
+wh2015<-read.delim(here::here("data/test_env/wh/bzbm3h2015.txt"),sep = "", dec = ".")
+wh2014<-read.delim(here::here("data/test_env/wh/bzbm3h2014.txt"),sep = "", dec = ".")
+
+wh<-rbind(wh2019,wh2018,wh2017,wh2016,wh2015,wh2014,wh2020)
+wh<-wh[,c(1:5,15)]
+wh<-wh%>%unite("date",c(2:3,1),sep="/")
+wh<-wh%>%unite("time",c(2:3),sep=":")
+wh<-wh%>%unite("DateTimeStamp", c(1:2),sep="")
+
+wh$rdate<-as.POSIXct(wh$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+wh<-wh[-1,]
+wh$site<-"wh"
+wh<-wh%>%filter(WTMP!="degC")
+wh<-wh%>%filter(WTMP!="999.0")
+wh$WTMP<-as.numeric(wh$WTMP)
+wh<-wh[,2:4]
+s.wh<-wh%>%filter(rdate >= as.Date(paste(year(rdate), 06, 01, sep = "-")), rdate <= as.Date(paste(year(rdate), 09, 30, sep = "-")))
+s.wh%>%  summarise(Value = max(WTMP))
+
+
+ggplot(wh,aes(x=rdate,y=WTMP))+geom_point()
+
+
+```
+
+# Beaufort
+
+### Beaufort long term data is clean and useable. Same source as original analysis.
+
+```{r,echo=F,warning=F}
+bf2020<-read.delim(here::here("data/test_env/bf/bftn7h2020.txt"),sep = "", dec = ".")
+bf2019<-read.delim(here::here("data/test_env/bf/bftn7h2019.txt"),sep = "", dec = ".")
+bf2018<-read.delim(here::here("data/test_env/bf/bftn7h2018.txt"),sep = "", dec = ".")
+bf2017<-read.delim(here::here("data/test_env/bf/bftn7h2017.txt"),sep = "", dec = ".")
+bf2016<-read.delim(here::here("data/test_env/bf/bftn7h2016.txt"),sep = "", dec = ".")
+bf2015<-read.delim(here::here("data/test_env/bf/bftn7h2015.txt"),sep = "", dec = ".")
+bf2014<-read.delim(here::here("data/test_env/bf/bftn7h2014.txt"),sep = "", dec = ".")
+
+bf<-rbind(bf2019,bf2018,bf2017,bf2016,bf2015,bf2014,bf2020)
+bf<-bf[,c(1:5,15)]
+bf<-bf%>%unite("date",c(2:3,1),sep="/")
+bf<-bf%>%unite("time",c(2:3),sep=":")
+bf<-bf%>%unite("DateTimeStamp", c(1:2),sep="")
+
+bf$rdate<-as.POSIXct(bf$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+bf<-bf[-1,]
+bf$site<-"bf"
+bf<-bf%>%filter(WTMP!="degC")
+bf<-bf%>%filter(WTMP!="999.0")
+bf$WTMP<-as.numeric(bf$WTMP)
+
+
+ggplot(bf,aes(x=rdate,y=WTMP))+geom_point()
+```
+
+# Folly beach
+
+### Folly Beach long term data is clean and useable. Same source as original analysis.
+
+
+```{r,echo=F,warning=F}
+
+fb2020<-read.delim(here::here("data/test_env/fb/chts1h2020.txt"),sep = "", dec = ".")
+
+fb2019<-read.delim(here::here("data/test_env/fb/chts1h2019.txt"),sep = "", dec = ".")
+fb2018<-read.delim(here::here("data/test_env/fb/chts1h2018.txt"),sep = "", dec = ".")
+fb2017<-read.delim(here::here("data/test_env/fb/chts1h2017.txt"),sep = "", dec = ".")
+fb2016<-read.delim(here::here("data/test_env/fb/chts1h2016.txt"),sep = "", dec = ".")
+fb2015<-read.delim(here::here("data/test_env/fb/chts1h2015.txt"),sep = "", dec = ".")
+fb2014<-read.delim(here::here("data/test_env/fb/chts1h2014.txt"),sep = "", dec = ".")
+
+fb<-rbind(fb2019,fb2018,fb2017,fb2016,fb2015,fb2014,fb2020)
+fb<-fb[,c(1:5,15)]
+fb<-fb%>%unite("date",c(2:3,1),sep="/")
+fb<-fb%>%unite("time",c(2:3),sep=":")
+fb<-fb%>%unite("DateTimeStamp", c(1:2),sep="")
+
+fb$rdate<-as.POSIXct(fb$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+fb<-fb[-1,]
+fb$site<-"fb"
+fb<-fb%>%filter(WTMP!="degC")
+fb<-fb%>%filter(WTMP!="999.0")
+fb$WTMP<-as.numeric(fb$WTMP)
+
+
+ggplot(fb,aes(x=rdate,y=WTMP))+geom_point()
+```
+
+
+# Oyster
+
+### Oyster long term data is clean and useable. Same source as original analysis.
+
+
+### Load and Analysis
+```{r,echo=F,warning=F}
+
+# Package ID: knb-lter-vcr.153.27 Cataloging System:https://pasta.edirepository.org.
+# Data set title: High and Low Tides of Hog Island Bay, Redbank, VA, and Oyster, VA for the Virginia Coast Reserve 2007-2018.
+# Data set creator:  John Porter -  
+# Data set creator:  David Krovetz -  
+# Data set creator:  James Spitler -  
+# Data set creator:  Thomas Williams -  
+# Data set creator:  Kathleen Overman -  
+# Data set creator:  William Nuttle -  
+# Metadata Provider:    - Virginia Coast Reserve Long-Term Ecological Research Project 
+# Contact:  John Porter -    - jhp7e@virginia.edu
+# Contact:    - Information manager - Virginia Coast Reserve Long-Term Ecological Research Project   - jhp7e@virginia.edu
+# Stylesheet v2.11 for metadata conversion into program: John H. Porter, Univ. Virginia, jporter@virginia.edu 
+
+inUrl1  <- "https://pasta.lternet.edu/package/data/eml/knb-lter-vcr/153/27/e7ab56ded773a2631a2fecaeb88de3f9" 
+infile1 <- tempfile()
+try(download.file(inUrl1,infile1,method="curl"))
+if (is.na(file.size(infile1))) download.file(inUrl1,infile1,method="auto")
+
+                   
+ dt2 <-read.csv(infile1,header=F 
+          ,skip=23
+            ,sep=","  
+                ,quot='"' 
+        , col.names=c(
+                    "STATION",     
+                    "TYPE",     
+                    "DATE",     
+                    "TIME",     
+                    "TIDE",     
+                    "WTEMP"    ), check.names=TRUE)
+               
+unlink(infile1)
+		    
+# Fix any interval or ratio columns mistakenly read in as nominal and nominal columns read as numeric or dates read as strings
+                
+if (class(dt2$STATION)!="factor") dt2$STATION<- as.factor(dt2$STATION)
+if (class(dt2$TYPE)!="factor") dt2$TYPE<- as.factor(dt2$TYPE)
+if (class(dt2$TIME)=="factor") dt2$TIME <-as.numeric(levels(dt2$TIME))[as.integer(dt2$TIME) ]               
+if (class(dt2$TIME)=="character") dt2$TIME <-as.numeric(dt2$TIME)
+if (class(dt2$TIDE)=="factor") dt2$TIDE <-as.numeric(levels(dt2$TIDE))[as.integer(dt2$TIDE) ]               
+if (class(dt2$TIDE)=="character") dt2$TIDE <-as.numeric(dt2$TIDE)
+if (class(dt2$WTEMP)=="factor") dt2$WTEMP <-as.numeric(levels(dt2$WTEMP))[as.integer(dt2$WTEMP) ]               
+if (class(dt2$WTEMP)=="character") dt2$WTEMP <-as.numeric(dt2$WTEMP)
+                
+         
+        
+        
+                
+```
+
+
+```{r,echo=F,warning=F}
+
+dt2$STATION<-as.character(dt2$STATION)
+oy_old<-dplyr::filter(dt2,STATION=="OYST ")
+oy_old$site<-"oy"
+oy_old$DATE<-as.POSIXct(oy_old$DATE,tz="", "%d%b%Y")
+#time is not possible :(
+oy_old$WTMP<-oy_old$WTEMP
+oy_old$rdate<-oy_old$DATE
+oy_old<-oy_old[,-c(1:6)]
+oy_old$WTMP<-as.numeric(oy_old$WTMP)
+oy_old<-oy_old%>%filter(rdate >= "2013-01-01")
+ggplot(oy_old,aes(x=rdate,y=WTMP))+geom_point()
+```
+
+# Skidaway
+
+### Skidaway data requires some thought. Grove creek (right next to collection site) was the original data source I used, from 2014. This is a complete year of data. However, there are no other dates available from this location. A one-time data collection operation. The two stations reflect two slighly different locations within the creek - both are useable, but I previously used S2. 
+
+## Grove Creek
+
+```{r,echo=F,warning=F}
+gcsk<-read.csv(here::here("data/test_env/sk/gcsk.csv"))
+gcsk<-gcsk%>%unite("DateTimeStamp", c(2:3),sep="")
+gcsk$rdate<-as.POSIXct(gcsk$DateTimeStamp,tz="", "%m/%d/%y%H:%M")
+
+ggplot(gcsk,aes(x=rdate,y=WTMP,color=station))+geom_point()+facet_wrap(vars(station))
+gcsk2<-gcsk%>%filter(station=="S2")
+mean(gcsk2$WTMP)
+max(gcsk2$WTMP)
+```
+
+## Savannah River Buoy
+
+### Savannah river NDBC buoy is the next closes option, at 13 km. This data is pretty complete, but is further away (13km) and is seemingly affected by the Savannah River plume. Mean temperatures are lower by a degree, max temp by two degrees. 
+
+```{r,echo=F,warning=F}
+
+sk2020<-read.delim(here::here("data/test_env/sk/fpkg1h2020.txt"),sep = "", dec = ".")
+sk2019<-read.delim(here::here("data/test_env/sk/fpkg1h2019.txt"),sep = "", dec = ".")
+sk2018<-read.delim(here::here("data/test_env/sk/fpkg1h2018.txt"),sep = "", dec = ".")
+sk2017<-read.delim(here::here("data/test_env/sk/fpkg1h2017.txt"),sep = "", dec = ".")
+sk2016<-read.delim(here::here("data/test_env/sk/fpkg1h2016.txt"),sep = "", dec = ".")
+sk2015<-read.delim(here::here("data/test_env/sk/fpkg1h2015.txt"),sep = "", dec = ".")
+sk2014<-read.delim(here::here("data/test_env/sk/fpkg1h2014.txt"),sep = "", dec = ".")
+
+sk<-rbind(sk2014,sk2015,sk2016,sk2017,sk2018,sk2019,sk2020)
+
+sk<-sk[,c(1:5,15)]
+sk<-sk%>%unite("date",c(2:3,1),sep="/")
+sk<-sk%>%unite("time",c(2:3),sep=":")
+sk<-sk%>%unite("DateTimeStamp", c(1:2),sep="")
+
+sk$rdate<-as.POSIXct(sk$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+sk<-sk[-1,]
+sk$site<-"sk"
+sk<-sk%>%filter(WTMP!="degC")
+sk<-sk%>%filter(WTMP!="999.0")
+sk$WTMP<-as.numeric(sk$WTMP)
+
+
+ggplot(sk,aes(x=rdate,y=WTMP))+geom_point()
+
+mean(sk$WTMP)
+max(sk$WTMP)
+```
+
+## Sapelo 
+
+### Sapelo Island is a NERRS site to the south of Skidaway by about 60 km. This is the closest next buoy, NERRS or NDBC otherwise. Temps here are pretty much in line with grove creek estimates. This is because both are located within the Georgia barrier islands areas about the same distance up a tidal creek (3-4 km). If we can get over the fact this is 60 km away (maybe via corelation of temps), this is an option).
+
+```{r,echo=F,warning=F}
+sap2020<-read.csv(here::here("data/test_env/sk/saphdwq2020.csv"))
+sap2019<-read.csv(here::here("data/test_env/sk/saphdwq2019.csv"))
+sap2018<-read.csv(here::here("data/test_env/sk/saphdwq2018.csv"))
+sap2017<-read.csv(here::here("data/test_env/sk/saphdwq2017.csv"))
+sap2016<-read.csv(here::here("data/test_env/sk/saphdwq2016.csv"))
+sap2015<-read.csv(here::here("data/test_env/sk/saphdwq2015.csv"))
+sap2014<-read.csv(here::here("data/test_env/sk/saphdwq2014.csv"))
+sap2013<-read.csv(here::here("data/test_env/sk/saphdwq2013.csv"))
+
+
+
+sap<-rbind(sap2019,sap2018,sap2017,sap2016,sap2015,sap2014,sap2020,sap2013)
+sap<-sap[,c(3,7)]
+
+sap$rdate<-as.POSIXct(sap$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+sap$WTMP<-sap$Temp
+sap$WTMP<-as.numeric(sap$WTMP)
+
+
+ggplot(sap,aes(x=rdate,y=WTMP))+geom_point()
+mean(sap$WTMP,na.rm=T)
+max(sap$WTMP,na.rm=T)
+
+```
+## Sapleo 2
+
+### The original sapelo site had freezing dates (low tide) and incomplete dates. Here's anotehr logger from the same site.
+
+```{r,echo=F,warning=F}
+sap2<-read.csv(here::here("data/test_env/sk/SAPDCWQ.csv"))
+sap2<-sap2[,c(3,7)]
+
+sap2$rdate<-as.POSIXct(sap2$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+sap2$WTMP<-sap2$Temp
+sap2$WTMP<-as.numeric(sap2$WTMP)
+
+
+ggplot(sap2,aes(x=rdate,y=WTMP))+geom_point()
+mean(sap2$WTMP,na.rm=T)
+max(sap2$WTMP,na.rm=T)
+
+```
+## Sapelo 3
+
+### Trying one more option
+
+```{r}
+sap3<-read.csv(here::here("data/test_env/sk/SAPCAWQ.csv"))
+sap3<-sap3[,c(3,7)]
+
+sap3$rdate<-as.POSIXct(sap3$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+sap3$WTMP<-sap3$Temp
+sap3$WTMP<-as.numeric(sap3$WTMP)
+
+
+ggplot(sap3,aes(x=rdate,y=WTMP))+geom_point()
+mean(sap3$WTMP,na.rm=T)
+max(sap3$WTMP,na.rm=T)
+
+```
+
+```{r,include=F}
+gcsk2<-gcsk2[,c(3:5)]
+sk<-sk[,c(2:4)]
+sap<-sap[,c(3:4)]
+sap$site<-"sap"
+sap2<-sap2[,c(3:4)]
+sap2$site<-"sap2"
+sap3<-sap3[,c(3:4)]
+sap3$site<-"sap3"
+
+str(gcsk2)
+str(sk)
+str(sap)
+str(sap2)
+str(sap3)
+
+gcsk2_join<-data.frame(gcsk2=gcsk2$WTMP,rdate=gcsk2$rdate)
+sk_join<-data.frame(sk=sk$WTMP,rdate=sk$rdate)
+sap_join<-data.frame(sap=sap$WTMP,rdate=sap$rdate)
+sap2_join<-data.frame(sap2=sap2$WTMP,rdate=sap2$rdate)
+sap3_join<-data.frame(sap3=sap3$WTMP,rdate=sap3$rdate)
+
+gcsk2_avg<-gcsk2_join %>%dplyr::mutate(rdate = lubridate::floor_date(rdate, "day")) %>%group_by(rdate)%>%
+  dplyr::summarize(gcsk2=mean(gcsk2))%>%filter(rdate >= as.POSIXct("2014-01-01 00:00:00")& rdate <= as.POSIXct("2014-12-31 00:00:00"))
+
+
+sk_avg<-sk_join %>%dplyr::mutate(rdate = lubridate::floor_date(rdate, "day")) %>%group_by(rdate)%>%
+  dplyr::summarize(sk = mean(sk))%>%
+  filter(rdate >= as.POSIXct("2015-01-01 00:00:00")& rdate <= as.POSIXct("2015-12-31 00:00:00"))
+
+sk_avg$rdate<-sk_avg$rdate%m-%years(1)
+
+sap_avg<-sap_join %>%dplyr::mutate(rdate = lubridate::floor_date(rdate, "day")) %>%group_by(rdate)%>%
+  dplyr::summarize(sap = mean(sap))%>%filter(rdate >= as.POSIXct("2014-01-01 00:00:00")& rdate <= as.POSIXct("2014-12-31 00:00:00"))
+
+
+
+sap2_avg<-sap2_join %>%dplyr::mutate(rdate = lubridate::floor_date(rdate, "day")) %>%group_by(rdate)%>%
+  dplyr::summarize(sap2 = mean(sap2))%>%filter(rdate >= as.POSIXct("2014-01-01 00:00:00")& rdate <= as.POSIXct("2014-12-31 00:00:00"))
+
+sap3_avg<-sap3_join %>%dplyr::mutate(rdate = lubridate::floor_date(rdate, "day")) %>%group_by(rdate)%>%
+  dplyr::summarize(sap3 = mean(sap3))%>%filter(rdate >= as.POSIXct("2014-01-01 00:00:00")& rdate <= as.POSIXct("2014-12-31 00:00:00"))
+
+gcsk2_a<-data.frame(rdate=gcsk2_avg$rdate,WTMP=gcsk2_avg$gcsk2,site="gcsk2")
+sk_a<-data.frame(rdate=sk_avg$rdate,WTMP=sk_avg$sk,site="sk")
+sap_a<-data.frame(rdate=sap_avg$rdate,WTMP=sap_avg$sap,site="sap")
+sap2_a<-data.frame(rdate=sap2_avg$rdate,WTMP=sap2_avg$sap2,site="sap2")
+sap3_a<-data.frame(rdate=sap3_avg$rdate,WTMP=sap3_avg$sap3,site="sap3")
+
+abcd<-rbind(gcsk2_a,sk_a,sap2_a,sap3_a,sap_a)
+sk_compare<-data.frame(rdate=unique(abcd$rdate))
+
+multi_full <- sk_compare%>%left_join(gcsk2_avg,by="rdate")%>%left_join(sk_avg,by="rdate")%>%left_join(sap_avg,by="rdate")%>%left_join(sap2_avg,by="rdate")%>%left_join(sap3_avg,by="rdate")
+
+ggplot(abcd,aes(x=rdate,y=WTMP,color=site))+geom_point()+geom_smooth()
+
+multi_full$ndate<-as.numeric(multi_full$rdate)/(24*60*60)
+
+summary(lm(gcsk2~sk,multi_full))
+summary(lm(gcsk2~sap,multi_full))
+summary(lm(gcsk2~sap2,multi_full))
+summary(lm(gcsk2~sap3,multi_full))
+
+ggplot(abcd,aes(x=rdate,y=WTMP,color=site))+geom_point()+geom_smooth(se=F)
+
+```
+#metrics
+```{r}
+sk_metrics<-data.frame("site"=c("gcsk","sk","sap","sap2","sap3"),"quantile"=NA,"decile"=NA, "max"=NA, "mean"=NA,"summer mean"=NA,"seasonlength10"=NA,"seasonlength12"=NA,"initialspawn"=NA,"maxspawn"=NA)
+gcsk2_avg<-na.omit(gcsk2_avg)
+sap_avg<-na.omit(sap_avg)
+sap2_avg<-na.omit(sap2_avg)
+sap3_avg<-na.omit(sap3_avg)
+
+sk_metrics[1,5]<-mean(gcsk2_avg$gcsk2)
+sk_metrics[2,5]<-mean(sk_avg$sk)
+sk_metrics[3,5]<-mean(sap_avg$sap)
+sk_metrics[4,5]<-mean(sap2_avg$sap2)
+sk_metrics[5,5]<-mean(sap3_avg$sap3)
+
+sk_metrics[1,4]<-max(gcsk2_avg$gcsk2)
+sk_metrics[2,4]<-max(sk_avg$sk)
+sk_metrics[3,4]<-max(sap_avg$sap)
+sk_metrics[4,4]<-max(sap2_avg$sap2)
+sk_metrics[5,4]<-max(sap3_avg$sap3)
+
+s.gcsk2_avg<-filter(gcsk2_avg,rdate>"2014-06-01 00:00:00" & rdate< "2014-09-30 00:00:00")
+s.sk_avg<-filter(sk_avg,rdate>"2014-06-01 00:00:00" & rdate< "2014-09-30 00:00:00")
+s.sap_avg<-filter(sap_avg,rdate>"2014-06-01 00:00:00" & rdate< "2014-09-30 00:00:00")
+s.sap2_avg<-filter(sap2_avg,rdate>"2014-06-01 00:00:00" & rdate< "2014-09-30 00:00:00")
+s.sap3_avg<-filter(sap3_avg,rdate>"2014-06-01 00:00:00" & rdate< "2014-09-30 00:00:00")
+
+sk_metrics[1,6]<-mean(s.gcsk2_avg$gcsk2)
+sk_metrics[2,6]<-mean(s.sk_avg$sk)
+sk_metrics[3,6]<-mean(s.sap_avg$sap)
+sk_metrics[4,6]<-mean(s.sap2_avg$sap2)
+sk_metrics[5,6]<-mean(s.sap3_avg$sap3)
+
+
+sk_metrics[1,2]<-quantile(s.gcsk2_avg$gcsk2,0.75,type=1)
+sk_metrics[2,2]<-quantile(s.sk_avg$sk,0.75,type=1)
+sk_metrics[3,2]<-quantile(s.sap_avg$sap,0.75,type=1)
+sk_metrics[4,2]<-quantile(s.sap2_avg$sap2,0.75,type=1)
+sk_metrics[5,2]<-quantile(s.sap3_avg$sap3,0.75,type=1)
+
+sk_metrics[1,3]<-quantile(s.gcsk2_avg$gcsk2,0.9,type=1)
+sk_metrics[2,3]<-quantile(s.sk_avg$sk,0.9,type=1)
+sk_metrics[3,3]<-quantile(s.sap_avg$sap,0.9,type=1)
+sk_metrics[4,3]<-quantile(s.sap2_avg$sap2,0.9,type=1)
+sk_metrics[5,3]<-quantile(s.sap3_avg$sap3,0.9,type=1)
+
+
+
+sk_metrics[1,7]<-gcsk2_avg%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(gcsk2))%>%na.omit()%>%filter(daily_wtmp>12.5)%>%tally
+sk_metrics[2,7]<-sk_avg%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(sk))%>%na.omit()%>%filter(daily_wtmp>12.5)%>%tally
+sk_metrics[3,7]<-sap_avg%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(sap))%>%na.omit()%>%filter(daily_wtmp>12.5)%>%tally
+sk_metrics[4,7]<-sap2_avg%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(sap2))%>%na.omit()%>%filter(daily_wtmp>12.5)%>%tally
+sk_metrics[5,7]<-sap3_avg%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(sap3))%>%na.omit()%>%filter(daily_wtmp>12.5)%>%tally
+
+sk_metrics[1,8]<-gcsk2_avg%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(gcsk2))%>%na.omit()%>%filter(daily_wtmp>10)%>%tally
+sk_metrics[2,8]<-sk_avg%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(sk))%>%na.omit()%>%filter(daily_wtmp>10)%>%tally
+sk_metrics[3,8]<-sap_avg%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(sap))%>%na.omit()%>%filter(daily_wtmp>10)%>%tally
+sk_metrics[4,8]<-sap2_avg%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(sap2))%>%na.omit()%>%filter(daily_wtmp>10)%>%tally
+sk_metrics[5,8]<-sap3_avg%>%mutate(day=as.Date(rdate,format="%Y-%m-%d"))%>%group_by(day)%>%dplyr::summarise(daily_wtmp=mean(sap3))%>%na.omit()%>%filter(daily_wtmp>10)%>%tally
+
+sk_metrics[1,9]<-mean((filter(gcsk2_avg,rdate>"2014-03-01 00:00:00" & rdate< "2014-03-30 00:00:00"))$gcsk2)
+sk_metrics[2,9]<-mean((filter(sk_avg,rdate>"2014-03-01 00:00:00" & rdate< "2014-03-30 00:00:00"))$sk)
+sk_metrics[3,9]<-mean((filter(sap_avg,rdate>"2014-03-01 00:00:00" & rdate< "2014-03-30 00:00:00"))$sap)
+sk_metrics[4,9]<-mean((filter(sap2_avg,rdate>"2014-03-01 00:00:00" & rdate< "2014-03-30 00:00:00"))$sap2)
+sk_metrics[5,9]<-mean((filter(sap3_avg,rdate>"2014-03-01 00:00:00" & rdate< "2014-03-30 00:00:00"))$sap3)
+
+sk_metrics[1,10]<-mean((filter(gcsk2_avg,rdate>"2014-03-01 00:00:00" & rdate< "2014-05-30 00:00:00"))$gcsk2)
+sk_metrics[2,10]<-mean((filter(sk_avg,rdate>"2014-03-01 00:00:00" & rdate< "2014-05-30 00:00:00"))$sk)
+sk_metrics[3,10]<-mean((filter(sap_avg,rdate>"2014-03-01 00:00:00" & rdate< "2014-05-30 00:00:00"))$sap)
+sk_metrics[4,10]<-mean((filter(sap2_avg,rdate>"2014-03-01 00:00:00" & rdate< "2014-05-30 00:00:00"))$sap2)
+sk_metrics[5,10]<-mean((filter(sap3_avg,rdate>"2014-03-01 00:00:00" & rdate< "2014-05-30 00:00:00"))$sap3)
+```
+
+# Willapa
+
+## We originally used data from the Nahcotta buoy, the closest data option to our site. We stitched data from the first half of 2015 and the last half of 2016 together to get a full years of data - as you can see, the data available from this site is pretty patchy. Not really suitable to use as a long time series. We were able to get an extended dataset from PSI. 
+
+## Nahcotta
+```{r,echo=F,warning=F}
+wp<-read.csv(here::here("data/test_env/wp/wp.csv"))
+wp$rdate<-as.POSIXct(wp$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+wp$WTMP<-as.numeric(wp$WTMP)
+ggplot(wp,aes(x=rdate,y=WTMP))+geom_point()
+mean(wp$WTMP,na.rm=T)
+max(wp$WTMP,na.rm=T)
+
+nah1<-filter(wp,rdate>"2014-01-01 00:00:00" & rdate< "2014-12-31 00:00:00")
+nah2<-filter(wp,rdate>"2017-01-01 00:00:00"&rdate< "2017-12-31 00:00:00")
+nah3<-filter(wp,rdate>"2019-01-01 00:00:00"&rdate< "2019-12-31 00:00:00")
+nah4<-filter(wp,rdate>"2012-01-01 00:00:00"&rdate< "2012-12-31 00:00:00")
+mean(nah1$WTMP)
+mean(nah2$WTMP)
+mean(nah3$WTMP)
+mean(nah4$WTMP)
+
+```
+
+
+## Toke Point
+
+### Toke Point is the next closest data soruce, about 30km away close to the mouth of Willapa Bay and thus is cooler (mean by 1.5C, max by 5C). However, this record is pretty complete. 
+
+```{r,echo=F,warning=F}
+wp22020<-read.delim(here::here("data/test_env/wp/tokw1h2020.txt"),sep = "", dec = ".")
+wp22019<-read.delim(here::here("data/test_env/wp/tokw1h2019.txt"),sep = "", dec = ".")
+wp22018<-read.delim(here::here("data/test_env/wp/tokw1h2018.txt"),sep = "", dec = ".")
+wp22017<-read.delim(here::here("data/test_env/wp/tokw1h2017.txt"),sep = "", dec = ".")
+wp22016<-read.delim(here::here("data/test_env/wp/tokw1h2016.txt"),sep = "", dec = ".")
+wp22015<-read.delim(here::here("data/test_env/wp/tokw1h2015.txt"),sep = "", dec = ".")
+wp22014<-read.delim(here::here("data/test_env/wp/tokw1h2014.txt"),sep = "", dec = ".")
+wp22013<-read.delim(here::here("data/test_env/wp/tokw1h2013.txt"),sep = "", dec = ".")
+
+wp2<-rbind(wp22019,wp22018,wp22017,wp22016,wp22015,wp22014,wp22020,wp22013)
+wp2<-wp2[,c(1:5,15)]
+wp2<-wp2%>%unite("date",c(2:3,1),sep="/")
+wp2<-wp2%>%unite("time",c(2:3),sep=":")
+wp2<-wp2%>%unite("DateTimeStamp", c(1:2),sep="")
+
+wp2$rdate<-as.POSIXct(wp2$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+wp2<-wp2[-1,]
+wp2$site<-"wp2"
+wp2<-wp2%>%filter(WTMP!="degC")
+wp2<-wp2%>%filter(WTMP!="999.0")
+wp2$WTMP<-as.numeric(wp2$WTMP)
+
+#wp2<-wp2%>%filter(rdate <= as.POSIXct("2014-01-01 00:00:00")| rdate >= as.POSIXct("2015-12-31 00:00:00"))
+
+ggplot(wp2,aes(x=rdate,y=WTMP))+geom_point()
+max(wp2$WTMP,na.rm=T)
+mean(wp2$WTMP,na.rm=T)
+```
+
+# Humboldt
+
+## Tuluwat Island
+
+### Tuluwat island ("indian" island) was one source that we used in our analysis, but this is very incomplete. 
+
+```{r}
+tul<-read.csv(here::here("data/test_env/hm/ind.csv"))
+tul<-tul%>%unite("DateTimeStamp", c(1:2),sep="")
+tul$rdate<-as.POSIXct(tul$DateTimeStamp,tz="", "%m/%d/%y%H:%M")
+ggplot(tul,aes(x=rdate,y=WTMP))+geom_point()
+max(tul$WTMP)
+mean(tul$WTMP)
+```
+
+## Wiyot tribe source of Tuluwat island
+
+### This data is still form Tuluwat, but a different portal. Unsure of why this one is so complete but the one above is not. The mean temperature lines up with the paper, but the maximum temperature is four degrees lower. 
+
+```{r,echo=F,warning=F,include=F}
+#2016
+wiyot2016<-read.csv(here::here("data/test_env/hm/wiyot2016.csv"),header=T)
+wiyot2016<-wiyot2016%>%filter(str_detect(sonde..2,"\\d"))
+wiyot2016<-wiyot2016%>%filter(!str_detect(sonde..2,"Daylight"))
+wiyot2016<-wiyot2016%>%unite("DateTimeStamp",c(2:3))
+wiyot2016<-wiyot2016%>%unite("WTMP",c(4:9))
+
+wiyot2016<-wiyot2016[,c(2,4)]
+wiyot2016$DateTimeStamp<-gsub("_","",as.character(wiyot2016$DateTimeStamp))
+wiyot2016$WTMP<-gsub("_","",as.character(wiyot2016$WTMP))
+wiyot2016$rdate<-as.POSIXct(wiyot2016$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+wiyot2016$site<-"hm"
+wiyot2016<-wiyot2016[,c(2:4)]
+wiyot2016$WTMP<-as.numeric(wiyot2016$WTMP)
+
+#2015
+wiyot2015<-read.csv(here::here("data/test_env/hm/wiyot2015.csv"),header=T)
+wiyot2015<-wiyot2015%>%filter(str_detect(Sample..,"\\d"))
+wiyot2015<-wiyot2015%>%filter(!str_detect(Sample..,"Daylight"))
+wiyot2015<-wiyot2015%>%filter(!str_detect(Sample..,"Chlorophyll"))
+wiyot2015<-wiyot2015%>%unite("WTMP",c(6:8))
+wiyot2015$WTMP<-gsub("_","",as.character(wiyot2015$WTMP))
+wiyot2015$DateTimeStamp<-wiyot2015$Date...Time
+wiyot2015$rdate<-as.POSIXct(wiyot2015$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+wiyot2015<-wiyot2015[,c(6,42)]
+wiyot2015$site<-"hm"
+wiyot2015$WTMP<-as.numeric(wiyot2015$WTMP)
+
+
+#2014
+wiyot2014<-read.csv(here::here("data/test_env/hm/wiyot2014.csv"),header=T)
+wiyot2014<-wiyot2014%>%filter(str_detect(Sample..,"\\d"))
+wiyot2014<-wiyot2014%>%filter(!str_detect(Sample..,"Daylight"))
+wiyot2014<-wiyot2014%>%filter(!str_detect(Sample..,"Chlorophyll"))
+wiyot2014<-wiyot2014%>%filter(!str_detect(Sample..,"Max"))
+wiyot2014<-wiyot2014%>%unite("DateTimeStamp",c(2:4))
+wiyot2014<-wiyot2014%>%unite("WTMP",c(5:7))
+wiyot2014$WTMP<-gsub("_","",as.character(wiyot2014$WTMP))
+wiyot2014$DateTimeStamp<-gsub("_","",as.character(wiyot2014$DateTimeStamp))
+wiyot2014<-wiyot2014[,c(2,5)]
+wiyot2014$site<-"hm"
+wiyot2014$rdate<-as.POSIXct(wiyot2014$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+wiyot2014<-wiyot2014[,c(2:4)]
+wiyot2014$WTMP<-as.numeric(wiyot2014$WTMP)
+
+#2013
+wiyot2013<-read.csv(here::here("data/test_env/hm/wiyot2013.csv"),header=T)
+wiyot2013<-wiyot2013%>%filter(str_detect(sonde..3,"\\d"))
+wiyot2013<-wiyot2013%>%filter(!str_detect(sonde..3,"sonde"))
+wiyot2013<-wiyot2013%>%filter(!str_detect(sonde..3,"Daylight"))
+wiyot2013<-wiyot2013%>%filter(!str_detect(sonde..3,"Chlorophyll"))
+wiyot2013<-wiyot2013%>%unite("DateTimeStamp",c(3:5))
+wiyot2013<-wiyot2013%>%unite("WTMP",c(4:6))
+wiyot2013$WTMP<-gsub("_","",as.character(wiyot2013$WTMP))
+wiyot2013$DateTimeStamp<-gsub("_","",as.character(wiyot2013$DateTimeStamp))
+wiyot2013$WTMP<-gsub("NA","",as.character(wiyot2013$WTMP))
+wiyot2013$WTMP<-as.numeric(wiyot2013$WTMP)
+wiyot2013<-wiyot2013[,c(3,4)]
+wiyot2013$rdate<-as.POSIXct(wiyot2013$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+wiyot2013<-wiyot2013[,c(2:3)]
+wiyot2013$site<-"hm"
+
+#2012
+wiyot2012<-read.csv(here::here("data/test_env/hm/wiyot2012.csv"),header=T)
+wiyot2012<-wiyot2012%>%filter(str_detect(sonde..3,"\\d"))
+wiyot2012<-wiyot2012%>%filter(!str_detect(sonde..3,"sonde"))
+wiyot2012<-wiyot2012%>%filter(!str_detect(sonde..3,"Daylight"))
+wiyot2012<-wiyot2012[,c(2,3)]
+wiyot2012$rdate<-as.POSIXct(wiyot2012$X,tz="", "%m/%d/%Y%H:%M")
+wiyot2012$WTMP<-wiyot2012$Indian.Island.Long.Term.Deployment..Water.Quality.Data
+wiyot2012<-wiyot2012[,c(3,4)]
+wiyot2012$WTMP<-as.numeric(wiyot2012$WTMP)
+wiyot2012$site<-"hm"
+
+
+#2011
+wiyot2011<-read.csv(here::here("data/test_env/hm/wiyot2011.csv"),header=T)
+wiyot2011<-wiyot2011%>%filter(str_detect(sonde..2,"\\d"))
+wiyot2011<-wiyot2011%>%filter(!str_detect(sonde..2,"sonde"))
+wiyot2011<-wiyot2011%>%filter(!str_detect(sonde..2,"Japan"))
+wiyot2011<-wiyot2011%>%unite("DateTimeStamp",c(2:4))
+wiyot2011<-wiyot2011%>%unite("WTMP",c(3:5))
+wiyot2011<-wiyot2011[,c(2,3)]
+wiyot2011$DateTimeStamp<-gsub("_","",as.character(wiyot2011$DateTimeStamp))
+wiyot2011$WTMP<-gsub("_","",as.character(wiyot2011$WTMP))
+wiyot2011$rdate<-as.POSIXct(wiyot2011$DateTimeStamp,tz="", "%m/%d/%Y%H:%M")
+wiyot2011$WTMP<-as.numeric(wiyot2011$WTMP)
+wiyot2011<-wiyot2011[,c(2:3)]
+wiyot2011$site<-"hm"
+
+```
+```{r,echo=F,warning=F}
+##plot
+wiyot<-rbind(wiyot2016,wiyot2015,wiyot2014,wiyot2013,wiyot2012,wiyot2011)
+ggplot(wiyot,aes(x=rdate,y=WTMP))+geom_point()
+
+mean(wiyot$WTMP,na.rm=T)
+max(wiyot$WTMP,na.rm=T)
+```
+
+## Humboldt University
+
+### The humboldt university buoy is slightly farther out toward the bay mouth (12km instead of 7km), and has a pretty complete record. However, temperatures are alsoc cooler here than our initial analysis, mean by two degrees and max by 7 degrees. 
+
+```{r,echo=F,warning=F}
+hm<-read.csv(here::here("data/test_env/hm/hm.csv"))
+hm<-hm%>%unite("DateTimeStamp", c(1:2),sep="")
+hm$rdate<-as.POSIXct(hm$DateTimeStamp,tz="", "%m/%d/%y%H:%M")
+hm<-hm%>%filter(WTMP <= 50)
+hm<-hm%>%filter(rdate <= as.POSIXct("2016-01-01 00:00:00")| rdate >= as.POSIXct("2016-12-31 00:00:00"))
+ggplot(hm,aes(x=rdate,y=WTMP))+geom_point()
+hm<-na.omit(hm)
+max(hm$WTMP)
+mean(hm$WTMP)
+```
