@@ -31,7 +31,7 @@ This R markdown file shows the statistical pathway we took to bootstrap model fi
 ## Data read in
 
 ```{r,include=F}
-growth.alive<-read.csv(here::here("data/growth.csv"))
+growth.alive<-read.csv(here::here("data/Villeneuve et al uro growth.csv"))
 growth.alive<-na.omit(growth.alive)
 growth.alive<-data.frame("temp"=growth.alive$temp,"cal.length"=growth.alive$cal.length,"bin"=growth.alive$bin,"pop"=growth.alive$pop, "cal.length.start"=growth.alive$cal.length.start)
 growth.alive<-growth.alive%>%
