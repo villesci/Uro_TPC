@@ -1,6 +1,6 @@
 # Urosalpinx thermal performance curve manuscript
 
-*Urosalpinx* thermal performance manuscript for submission to ProcB, *Environment and phenology shape local adaptation in thermal performance*
+*Urosalpinx* thermal performance manuscript for ProcB, *Environment and phenology shape local adaptation in thermal performance*
 
 ## Scripts
 
