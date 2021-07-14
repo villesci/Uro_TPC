@@ -130,7 +130,7 @@ growth[268,12]=.0261
 
 #Let's bring in the consumption data, and see which snails ran out of food MORE than once. We will keep snails that ran out only once. 
 
-cons<-read.csv(here::here("data/uro.consumption2.csv"))
+cons<-read.csv(here::here("data/Villeneuve et al consumption.csv"))
 cons<-na.omit(cons)
 
 cons$allcons<-ifelse(cons$all.consumed=="n","0",ifelse(cons$all.consumed=="y","1",NA))
